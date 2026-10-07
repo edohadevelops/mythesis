@@ -34,6 +34,7 @@ import {
   Play, Pause, RotateCcw, Sparkles, BookMarked, PenTool, Smartphone, Star,
   AlertCircle, Edit3, Target, Save, ChevronLeft, Zap, ClipboardList,
 } from "lucide-react";
+import ResponsesTab, { useAllResponses } from "./ResponsesTab";
 
 /* ─── DESIGN TOKENS ──────────────────────────────────────────────────── */
 const T = {
@@ -2296,6 +2297,9 @@ function FundingView({ fundingStatus, onToggle }) {
 /* ─── SURVEY VIEW ────────────────────────────────────────────────────────
    Tabs: QR (live, points to app survey tab) | In-App Form | Data Table
    IRB IS APPROVED — survey is fully live.
+   Counts and the Data Table merge BOTH storage locations:
+     - thesis_responses table (public survey.html / QR code)
+     - thesis_state "responses" (in-app form + manual entries)
 ──────────────────────────────────────────────────────────────────────── */
 function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetAppUrl }) {
   const [tab, setTab]             = useState("qr");
@@ -2308,9 +2312,11 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
   const [copiedLink, setCopiedLink] = useState(false);
   const [urlInput, setUrlInput]   = useState(appUrl || "");
 
+  const all = useAllResponses({ sbUrl: SB_URL, sbKey: SB_KEY, localResponses: responses, onDeleteLocal: onDeleteResponse });
+
   const sections    = [...new Set(SURVEY_FIELDS.map((f) => f.section))];
-  const totalCount  = responses.length;
-  const atRiskCount = responses.filter((r) => scorePHQ2(r) >= 3).length;
+  const totalCount  = all.rows.length;
+  const atRiskCount = all.rows.filter((r) => r._atRisk).length;
   const epvNum      = totalCount > 0 ? (totalCount * 0.75 * 0.30) / 13 : 0;
   const epv         = epvNum.toFixed(1);
   const epvColor    = epvNum >= 10 ? T.blue : epvNum >= 5 ? T.amber : T.coral;
@@ -2340,16 +2346,6 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
     await onAddResponse({ ...manualForm, id: `resp-manual-${Date.now()}`, timestamp: new Date().toISOString(), source: "manual" });
     setManualForm({});
     setManualOpen(false);
-  };
-
-  const exportCSV = () => {
-    const headers = ["id","timestamp","source",...SURVEY_FIELDS.map((f) => f.id)].join(",");
-    const rows = responses.map((r) =>
-      ["id","timestamp","source",...SURVEY_FIELDS.map((f) => f.id)].map((k) => JSON.stringify(r[k] ?? "")).join(",")
-    );
-    const blob = new Blob([[headers,...rows].join("\n")], {type:"text/csv"});
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
-    a.download = `thesis_responses_${TODAY()}.csv`; a.click();
   };
 
   const copyLink = () => {
@@ -2556,9 +2552,6 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
             <button onClick={() => setManualOpen((o) => !o)} style={{ display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:8, background:T.amber, color:"var(--on-primary)", border:"none", cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>
               <Plus size={13}/> Manual entry
             </button>
-            <button onClick={exportCSV} style={{ display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:8, background:T.surface, border:`1px solid ${T.chalkFaint}`, color:T.chalk, cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>
-              <Download size={13}/> Export CSV
-            </button>
           </div>
 
           {/* EPV bar */}
@@ -2600,45 +2593,8 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
             </Card>
           )}
 
-          {/* Response table */}
-          {responses.length === 0 ? (
-            <Card><div style={{ fontSize:13, color:T.chalkDim }}>No responses yet. Responses from the survey form and manual entries appear here.</div></Card>
-          ) : (
-            <div style={{ overflowX:"auto", borderRadius:10, border:`1px solid ${T.chalkFaint}` }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontSize:11, color:T.chalk }}>
-                <thead>
-                  <tr style={{ background:T.surface2 }}>
-                    {["#","Date","Country","Level","Time in US","PHQ-2","At risk","Source",""].map((h) => (
-                      <th key={h} style={{ padding:"8px 10px", textAlign:"left", borderBottom:`1px solid ${T.chalkFaint}`, fontWeight:600, whiteSpace:"nowrap", color:T.chalk }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {[...responses].reverse().map((r, i) => {
-                    const phq2 = scorePHQ2(r);
-                    const atRisk = phq2 >= 3;
-                    return (
-                      <tr key={r.id} style={{ background: i%2===0?T.surface:T.bgDeep }}>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}`, color:T.chalkDim }}>{responses.length-i}</td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}`, whiteSpace:"nowrap" }}>{r.timestamp?.slice(0,10)||"—"}</td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}` }}>{r.q1||"—"}</td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}`, whiteSpace:"nowrap" }}>{r.q2?.split(" ")[0]||"—"}</td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}`, whiteSpace:"nowrap" }}>{r.q3||"—"}</td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}`, textAlign:"center", fontWeight:700, color:atRisk?T.coral:T.chalk }}>{phq2}</td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}`, textAlign:"center" }}>
-                          {atRisk?<span style={{ color:T.coral, fontWeight:700 }}>YES</span>:<span style={{ color:T.chalkDim }}>—</span>}
-                        </td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}`, color:T.chalkDim }}>{r.source||"form"}</td>
-                        <td style={{ padding:"7px 10px", borderBottom:`1px solid ${T.chalkFaint}` }}>
-                          <button onClick={() => onDeleteResponse(r.id)} style={{ background:"none", border:"none", cursor:"pointer", color:T.coral, padding:0 }}><Trash2 size={13}/></button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+          {/* All responses — survey page + in-app + manual, with review, PDFs, CSV and R exports */}
+          <ResponsesTab {...all} />
         </div>
       )}
     </div>
