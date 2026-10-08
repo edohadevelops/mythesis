@@ -33,7 +33,7 @@ import {
   Settings, Bell, BellOff, Download, RefreshCcw, Plus, Trash2, Copy, Check,
   Play, Pause, RotateCcw, Sparkles, BookMarked, PenTool, Smartphone, Star,
   AlertCircle, Edit3, Target, Save, ChevronLeft, Zap, ClipboardList,
-  ExternalLink, Maximize2, X,
+  ExternalLink, Maximize2, X, Lock, LogOut,
 } from "lucide-react";
 import ResponsesTab, { useAllResponses } from "./ResponsesTab";
 
@@ -2792,6 +2792,10 @@ function SettingsView({ theme, onSetTheme, fontSize, onSetFontSize, onReset, onE
         </div>
       </Card>
 
+      <button onClick={signOut} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", borderRadius: 8, background: T.surface, border: `1px solid ${T.chalkFaint}`, color: T.chalk, fontSize: 13, cursor: "pointer", fontFamily: "inherit", marginBottom: 10 }}>
+        <LogOut size={14} /> Sign out
+      </button>
+
       <button onClick={onReset} style={{ display: "flex", alignItems: "center", gap: 6, padding: "10px 16px", borderRadius: 8, background: T.coralDim, border: `1px solid ${T.coral}44`, color: T.coral, fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>
         <RefreshCcw size={14} /> Reset all progress
       </button>
@@ -2799,8 +2803,90 @@ function SettingsView({ theme, onSetTheme, fontSize, onSetFontSize, onReset, onE
   );
 }
 
-/* ─── MAIN APP ───────────────────────────────────────────────────────── */
+/* ─── LOGIN GATE ─────────────────────────────────────────────────────────
+   Keeps the tracker private. The public survey (survey.html) is a separate
+   page and is NOT affected by this.
+   Only a SHA-256 hash of "username:password" is stored here, not the password.
+   To change the login, compute sha256("newuser:newpass") and replace AUTH_HASH.
+──────────────────────────────────────────────────────────────────────── */
+const AUTH_HASH = "6e085977773c1f683f48235636c475edc5d3abe3f6dedbc1669d11efb94052d1";
+const AUTH_KEY  = "thesis-auth-v1";
+
+async function sha256Hex(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+function readAuth() {
+  try { return localStorage.getItem(AUTH_KEY) === AUTH_HASH || sessionStorage.getItem(AUTH_KEY) === AUTH_HASH; } catch { return false; }
+}
+function signOut() {
+  try { localStorage.removeItem(AUTH_KEY); sessionStorage.removeItem(AUTH_KEY); } catch {}
+  window.location.reload();
+}
+
+function LoginScreen({ onSuccess }) {
+  const [user, setUser]         = useState("");
+  const [pass, setPass]         = useState("");
+  const [remember, setRemember] = useState(true);
+  const [error, setError]       = useState("");
+  const [busy, setBusy]         = useState(false);
+  const hour = new Date().getHours();
+  const cssVars = hour < 7 || hour >= 19 ? DARK : LIGHT;
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setError("");
+    const h = await sha256Hex(`${user.trim().toLowerCase()}:${pass}`);
+    if (h === AUTH_HASH) {
+      try { (remember ? localStorage : sessionStorage).setItem(AUTH_KEY, h); } catch {}
+      onSuccess();
+    } else {
+      setError("Username or password is incorrect.");
+      setPass("");
+    }
+    setBusy(false);
+  };
+
+  const field = { width:"100%", padding:"11px 12px", borderRadius:10, border:"1px solid var(--border)", background:"var(--bg-deep)", color:"var(--text)", fontSize:15, fontFamily:"inherit" };
+
+  return (
+    <div style={{ ...cssVars, minHeight:"100vh", background:"var(--bg)", color:"var(--text)", fontFamily:"'Sora', -apple-system, sans-serif", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&display=swap'); * { box-sizing:border-box; } body { margin:0; } input:focus, button:focus-visible { outline:2px solid var(--primary); outline-offset:1px; }`}</style>
+      <form onSubmit={submit} style={{ width:"100%", maxWidth:360, background:"var(--surface)", border:"1px solid var(--border)", borderRadius:16, padding:"28px 24px" }}>
+        <div style={{ width:42, height:42, borderRadius:12, background:"var(--primary)", color:"var(--on-primary)", display:"flex", alignItems:"center", justifyContent:"center", marginBottom:14 }}>
+          <Lock size={20} />
+        </div>
+        <div style={{ fontSize:19, fontWeight:700, marginBottom:4 }}>First 90 — Thesis</div>
+        <div style={{ fontSize:13, color:"var(--text-dim)", marginBottom:20 }}>Sign in to open your thesis tracker.</div>
+
+        <label htmlFor="login-user" style={{ display:"block", fontSize:12, fontWeight:600, marginBottom:5 }}>Username</label>
+        <input id="login-user" value={user} onChange={(e) => setUser(e.target.value)} autoComplete="username" autoCapitalize="none" autoCorrect="off" style={{ ...field, marginBottom:12 }} />
+
+        <label htmlFor="login-pass" style={{ display:"block", fontSize:12, fontWeight:600, marginBottom:5 }}>Password</label>
+        <input id="login-pass" type="password" value={pass} onChange={(e) => setPass(e.target.value)} autoComplete="current-password" style={{ ...field, marginBottom:12 }} />
+
+        <label style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-dim)", marginBottom:16, cursor:"pointer" }}>
+          <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} style={{ accentColor:"var(--primary)" }} />
+          Keep me signed in on this device
+        </label>
+
+        {error && <div role="alert" style={{ fontSize:13, color:"var(--danger)", background:"var(--danger-dim)", borderRadius:8, padding:"8px 10px", marginBottom:12 }}>{error}</div>}
+
+        <button type="submit" disabled={busy || !user || !pass} style={{ width:"100%", padding:"12px 0", borderRadius:10, background:"var(--primary)", color:"var(--on-primary)", border:"none", fontSize:15, fontWeight:700, fontFamily:"inherit", cursor:"pointer", opacity: busy || !user || !pass ? 0.6 : 1 }}>
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 export default function ThesisApp() {
+  const [authed, setAuthed] = useState(readAuth);
+  return authed ? <ThesisAppInner /> : <LoginScreen onSuccess={() => setAuthed(true)} />;
+}
+
+/* ─── MAIN APP ───────────────────────────────────────────────────────── */
+function ThesisAppInner() {
   const [view,          setView]         = useState("dashboard");
   const [tasks,         setTasks]        = useState([]);
   const [chStatus,      setChStatus]     = useState({});
@@ -3043,6 +3129,9 @@ export default function ThesisApp() {
               </button>
             )}
             {notifEnabled && <Bell size={14} color={T.amber} />}
+            <button onClick={signOut} title="Sign out" aria-label="Sign out" style={{ background: "none", border: "none", cursor: "pointer", color: T.chalkDim, padding: 4 }}>
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
 
