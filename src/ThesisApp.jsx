@@ -836,7 +836,7 @@ const TASK_GUIDES = {
 
 
 /* ─── SURVEY FIELDS ─────────────────────────────────────────────────────
-   All 30 questions with type, options, and scoring info.
+   The 29 IRB-approved items (Q1–Q3, Q5–Q30; there is no Q4).
    Used by both the in-app survey form and the data table.
 ──────────────────────────────────────────────────────────────────────── */
 const SURVEY_FIELDS = [
@@ -844,7 +844,6 @@ const SURVEY_FIELDS = [
   { id:"q1",  section:"Demographics", label:"Country of origin", type:"text", required:true },
   { id:"q2",  section:"Demographics", label:"Level of study", type:"select", options:["Undergraduate","Graduate (Master's)","Graduate (PhD)","Other"], required:true },
   { id:"q3",  section:"Demographics", label:"Time in the United States", type:"select", options:["Less than 6 months","6 to 12 months","1 to 2 years","More than 2 years"], required:true },
-  { id:"q4",  section:"Demographics", label:"Gender", type:"select", options:["Man","Woman","Non-binary","Prefer not to say","Prefer to self-describe"], required:true },
   { id:"q5",  section:"Demographics", label:"Active faith or religious community in the US", type:"select", options:["Yes","No","Still looking for one"], required:true },
   // Section 2 — PHQ-2
   { id:"q6",  section:"PHQ-2", label:"Little interest or pleasure in doing things", type:"scale4", scale:"0=Not at all, 3=Nearly every day", required:true },
@@ -856,19 +855,19 @@ const SURVEY_FIELDS = [
   { id:"q10", section:"UCLA Loneliness", label:"I feel that I lack companionship", type:"scale3", scale:"1=Hardly ever, 3=Often", required:true },
   { id:"q11", section:"UCLA Loneliness", label:"I feel isolated from other people", type:"scale3", scale:"1=Hardly ever, 3=Often", required:true },
   // Section 5 — ASSIS
-  { id:"q12", section:"ASSIS", label:"People here do not understand my cultural values", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
+  { id:"q12", section:"ASSIS", label:"I feel that people here do not understand my cultural values", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
   { id:"q13", section:"ASSIS", label:"I miss my family and friends back home", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
-  { id:"q14", section:"ASSIS", label:"People here treat me differently because of where I am from", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
+  { id:"q14", section:"ASSIS", label:"I feel that people here treat me differently because of where I am from", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
   { id:"q15", section:"ASSIS", label:"I am afraid I will not be able to complete my studies here", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
-  { id:"q16", section:"ASSIS", label:"Adjusting to a new way of life here has been difficult", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
+  { id:"q16", section:"ASSIS", label:"Adjusting to a new way of life here has been difficult for me", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
   { id:"q17", section:"ASSIS", label:"I feel guilty about leaving my family back home", type:"scale5", scale:"1=Not at all stressful, 5=Extremely stressful", required:true },
   // Section 6 — Financial Stress
-  { id:"q18", section:"Financial Stress", label:"I feel stressed about my ability to cover basic expenses here", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
+  { id:"q18", section:"Financial Stress", label:"I feel stressed about my ability to cover my basic expenses here", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
   { id:"q19", section:"Financial Stress", label:"My financial situation affects my ability to focus on my studies", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
   { id:"q20", section:"Financial Stress", label:"I have had to go without something I needed because I could not afford it", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
   // Section 7 — Original items
   { id:"q21", section:"Faith", label:"Since arriving in the US, I have found it difficult to maintain my faith or spiritual practice", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
-  { id:"q22", section:"Faith", label:"My faith community has been a source of strength during my time here (REVERSE SCORED)", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true, reverse:true },
+  { id:"q22", section:"Faith", label:"My faith community has been a source of strength during my time here", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true, reverse:true },
   { id:"q23", section:"Visa Anxiety", label:"I frequently worry about changes to immigration policy affecting my student visa", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
   { id:"q24", section:"Visa Anxiety", label:"Uncertainty about my visa status affects my ability to focus on my studies", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
   { id:"q25", section:"Housing", label:"I have had difficulty finding suitable housing since arriving in the US", type:"scale5", scale:"1=Strongly disagree, 5=Strongly agree", required:true },
@@ -2356,7 +2355,7 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
   return (
     <div style={{ animation: "fadeIn .3s ease" }}>
       <div style={{ fontSize: 18, fontWeight: 600, color: T.chalk, marginBottom: 2 }}>Survey</div>
-      <div style={{ fontSize: 13, color: T.chalkDim, marginBottom: 14 }}>30 questions · 6–8 minutes · Anonymous · IRB approved ✓</div>
+      <div style={{ fontSize: 13, color: T.chalkDim, marginBottom: 14 }}>29 questions · 6–8 minutes · Anonymous · IRB approved ✓</div>
 
       {/* Tabs */}
       <div style={{ display:"flex", gap:4, background:T.surface, borderRadius:99, padding:4, marginBottom:16, border:`1px solid ${T.chalkFaint}` }}>
@@ -2481,8 +2480,7 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
                       <div style={{ fontSize:13, color:T.chalk, lineHeight:1.5, marginBottom:8, fontWeight:500 }}>
                         {field.id.toUpperCase()}. {field.label}
                         {field.required && <span style={{ color:T.coral }}> *</span>}
-                        {field.reverse && <span style={{ fontSize:10, color:T.chalkDim, marginLeft:4 }}>(reverse scored)</span>}
-                      </div>
+                                              </div>
                       {field.type === "text" ? (
                         <input
                           type="text"
