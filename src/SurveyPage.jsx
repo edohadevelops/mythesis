@@ -12,16 +12,25 @@ function saveLocalBackup(data) {
   } catch (e) {}
 }
 
+// Saves to Supabase. Throws if the response did not reach the database,
+// so the page can tell the participant instead of showing a false success.
 async function saveResponse(data) {
   saveLocalBackup(data);
+  let res;
   try {
-    const res = await fetch(SB_URL + "/rest/v1/thesis_responses", {
+    res = await fetch(SB_URL + "/rest/v1/thesis_responses", {
       method: "POST",
       headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY, "Content-Type": "application/json", Prefer: "return=minimal" },
       body: JSON.stringify(data),
     });
-    if (!res.ok) console.error("Supabase error:", await res.text());
-  } catch (e) { console.error("Network error:", e); }
+  } catch (e) {
+    console.error("Network error:", e);
+    throw new Error("network");
+  }
+  if (!res.ok) {
+    console.error("Supabase error:", res.status, await res.text());
+    throw new Error("server");
+  }
   return true;
 }
 
@@ -166,7 +175,9 @@ export default function SurveyPage() {
       setSubmitted(true);
       topRef.current && topRef.current.scrollIntoView({ behavior: "smooth" });
     } catch (e) {
-      setSubmitErr("Something went wrong. Your response has been saved locally. Please try again.");
+      setSubmitErr(e && e.message === "network"
+        ? "Your response was not submitted because the connection dropped. Check your internet connection, then tap Submit again. Your answers are still here."
+        : "Your response was not submitted because of a problem on our end. Please tap Submit again in a moment. If it keeps failing, please try again later. Your answers are still here.");
     } finally {
       setSubmitting(false);
     }
@@ -361,7 +372,7 @@ export default function SurveyPage() {
                   <div style={{ fontSize:13, color:TEXT, lineHeight:1.7 }}>MSU Counseling: <strong>(417) 836-5116</strong>  988 Lifeline: <strong>call or text 988</strong></div>
                 </div>
               )}
-              {submitErr && <div style={{ background:RED_BG, border:"1px solid " + RED_BR, borderRadius:10, padding:"12px 14px", marginBottom:14, fontSize:13, color:RED }}>{submitErr}</div>}
+              {submitErr && <div role="alert" style={{ background:RED_BG, border:"1px solid " + RED_BR, borderRadius:10, padding:"12px 14px", marginBottom:14, fontSize:13, color:RED }}>{submitErr}</div>}
               <div style={{ display:"flex", gap:10 }}>
                 <button onClick={() => navigate("back")} style={{ flex:"0 0 auto", padding:"14px 20px", borderRadius:12, background:WHITE, border:"1.5px solid " + BORDER, color:DIM, fontSize:14, fontWeight:600, cursor:"pointer", fontFamily:"inherit" }}>Back</button>
                 <button onClick={handleSubmit} disabled={submitting} style={{ ...BTN(submitting), flex:1 }}>
