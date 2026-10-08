@@ -2310,7 +2310,6 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
   const [manualOpen, setManualOpen] = useState(false);
   const [manualForm, setManualForm] = useState({});
   const [copiedLink, setCopiedLink] = useState(false);
-  const [urlInput, setUrlInput]   = useState(appUrl || "");
   const [qrFull, setQrFull]       = useState(false);
 
   // Full-screen QR: show overlay and ask the browser for true full screen where supported
@@ -2340,8 +2339,8 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
   const epv         = epvNum.toFixed(1);
   const epvColor    = epvNum >= 10 ? T.blue : epvNum >= 5 ? T.amber : T.coral;
 
-  // QR points to the standalone /survey page — clean, no nav, just the survey
-  const surveyDeepLink = appUrl ? appUrl.replace(/\/+$/, "") + "/survey.html" : "";
+  // QR points to the standalone survey page on this same site — no manual URL needed
+  const surveyDeepLink = (typeof window !== "undefined" ? window.location.origin : "https://edohathesis.netlify.app") + "/survey.html";
 
   const validate = (data) => {
     const errs = {};
@@ -2420,7 +2419,7 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
           </Card>
 
           {/* QR display */}
-          <Card style={{ textAlign:"center", padding:"28px 20px" }}>
+          <Card style={{ textAlign:"center", padding:"28px 20px", display:"flex", flexDirection:"column", alignItems:"center" }}>
             <div style={{ fontSize:16, fontWeight:700, color:T.chalk, marginBottom:6 }}>
               Scan to take the survey
             </div>
@@ -2459,33 +2458,14 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
             ) : (
               <>
                 <div style={{ width:240, height:240, borderRadius:12, background:T.bgDeep, border:`2px dashed ${T.chalkFaint}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:13, color:T.chalkDim, textAlign:"center", padding:20, lineHeight:1.6, maxWidth:"100%" }}>
-                  Paste your deployed app URL below and the QR code will appear here instantly
+                  Loading survey link…
                 </div>
               </>
             )}
           </Card>
 
-          {/* App URL input */}
-          <Card>
-            <div style={{ fontSize:12, fontWeight:600, color:T.chalk, marginBottom:6 }}>Your deployed app URL</div>
-            <div style={{ fontSize:11, color:T.chalkDim, marginBottom:8 }}>
-              Paste your Netlify URL (e.g. https://my-thesis.netlify.app). The QR code will point participants directly to the survey form.
-            </div>
-            <div style={{ display:"flex", gap:8 }}>
-              <input
-                type="url" value={urlInput}
-                onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://your-app.netlify.app"
-                style={{ flex:1, padding:"7px 10px", borderRadius:8, border:`1px solid ${T.chalkFaint}`, background:T.bgDeep, color:T.chalk, fontSize:13, fontFamily:"inherit" }}
-              />
-              <button onClick={() => onSetAppUrl(urlInput)} style={{ padding:"7px 14px", borderRadius:8, background:T.amber, color:"var(--on-primary)", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"inherit" }}>
-                Save
-              </button>
-            </div>
-          </Card>
-
           {/* Response count */}
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+          <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"center" }}>
             <StatCard label="Responses" value={totalCount} color={T.amber} sub="total collected" />
             <StatCard label="At risk" value={atRiskCount} color={T.coral} sub="PHQ-2 ≥ 3" />
             <StatCard label="EPV" value={epv} color={epvColor} sub="÷ 13 predictors" />
