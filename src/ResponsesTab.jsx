@@ -26,7 +26,6 @@ const SECTIONS = [
     ["q1", "Country of origin"],
     ["q2", "Current level of study"],
     ["q3", "Time in the United States"],
-    ["q4", "Gender"],
     ["q5", "Active faith or religious community in the US"],
   ]},
   { title: "PHQ-2 + GAD-2 (0–3)", items: [
@@ -72,7 +71,7 @@ const SECTIONS = [
 
 const SCALE_KEYS = Array.from({ length: 25 }, (_, i) => `q${i + 6}`); // q6–q30
 const CORE_KEYS = ["q1", "q2", "q3", "q5", ...SCALE_KEYS];               // 29 IRB items
-const ALL_KEYS = ["q1", "q2", "q3", "q4", "q5", ...SCALE_KEYS];
+const ALL_KEYS = ["q1", "q2", "q3", "q5", ...SCALE_KEYS];
 
 /* ─── Helpers ────────────────────────────────────────────────────────── */
 // Handles "3", 3, and "3 — Nearly every day"
@@ -197,7 +196,7 @@ function exportAnalysisCSV(rows) {
     const o = {
       id: r.id, timestamp: r.timestamp, source: r.source || r._origin,
       country: text(r.q1), level: text(r.q2), time_in_us: text(r.q3),
-      gender: text(r.q4), faith_community: text(r.q5),
+      faith_community: text(r.q5),
     };
     SCALE_KEYS.forEach((k) => (o[k] = num(r[k])));
     const q22 = num(r.q22);
@@ -210,7 +209,7 @@ function exportAnalysisCSV(rows) {
     o.flag_incomplete = r._flags.includes("Incomplete") ? 1 : 0;
     return o;
   });
-  const cols = ["id", "timestamp", "source", "country", "level", "time_in_us", "gender", "faith_community",
+  const cols = ["id", "timestamp", "source", "country", "level", "time_in_us", "faith_community",
     ...SCALE_KEYS, "q22_r", "phq2", "gad2", "depressed", "flag_straightline", "flag_duplicate", "flag_incomplete"];
   downloadBlob(toCSV(out, cols), `thesis_analysis_${today()}.csv`, "text/csv");
 }
@@ -404,7 +403,7 @@ function exportResponsePDF(r) {
     ["Source", r.source || (r._origin === "table" ? "survey page" : "in-app")],
   ], { styles: { fontSize: 10 } });
   SECTIONS.forEach((s) => {
-    const items = s.items.filter(([k]) => k !== "q4" || r.q4);
+    const items = s.items;
     tbl(doc, doc.lastAutoTable.finalY + 12, [s.title, "Answer"],
       items.map(([k, label]) => [`${k.toUpperCase()}. ${label}`, text(r[k]) || "—"]),
       { columnStyles: { 1: { cellWidth: 150 } } });
@@ -489,7 +488,7 @@ function DetailPanel({ row, onClose, onDelete }) {
 
         <div style={{ padding: "4px 18px 40px" }}>
           {SECTIONS.map((s) => {
-            const items = s.items.filter(([k]) => k !== "q4" || row.q4);
+            const items = s.items;
             return (
               <div key={s.title} style={{ marginBottom: 16 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.primary, marginBottom: 6 }}>{s.title}</div>
