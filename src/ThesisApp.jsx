@@ -33,6 +33,7 @@ import {
   Settings, Bell, BellOff, Download, RefreshCcw, Plus, Trash2, Copy, Check,
   Play, Pause, RotateCcw, Sparkles, BookMarked, PenTool, Smartphone, Star,
   AlertCircle, Edit3, Target, Save, ChevronLeft, Zap, ClipboardList,
+  ExternalLink, Maximize2, X,
 } from "lucide-react";
 import ResponsesTab, { useAllResponses } from "./ResponsesTab";
 
@@ -2310,6 +2311,25 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
   const [manualForm, setManualForm] = useState({});
   const [copiedLink, setCopiedLink] = useState(false);
   const [urlInput, setUrlInput]   = useState(appUrl || "");
+  const [qrFull, setQrFull]       = useState(false);
+
+  // Full-screen QR: show overlay and ask the browser for true full screen where supported
+  const openQrFull = () => {
+    setQrFull(true);
+    try { document.documentElement.requestFullscreen?.(); } catch {}
+  };
+  const closeQrFull = () => {
+    setQrFull(false);
+    try { if (document.fullscreenElement) document.exitFullscreen?.(); } catch {}
+  };
+  useEffect(() => {
+    if (!qrFull) return;
+    const onKey = (e) => { if (e.key === "Escape") closeQrFull(); };
+    const onFsChange = () => { if (!document.fullscreenElement) setQrFull(false); };
+    window.addEventListener("keydown", onKey);
+    document.addEventListener("fullscreenchange", onFsChange);
+    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("fullscreenchange", onFsChange); };
+  }, [qrFull]);
 
   const all = useAllResponses({ sbUrl: SB_URL, sbKey: SB_KEY, localResponses: responses, onDeleteLocal: onDeleteResponse });
 
@@ -2354,6 +2374,27 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
 
   return (
     <div style={{ animation: "fadeIn .3s ease" }}>
+      {qrFull && surveyDeepLink && (
+        <div role="dialog" aria-modal="true" aria-label="Survey QR code, full screen"
+          style={{ position:"fixed", inset:0, zIndex:200, background:"#ffffff", display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:24, textAlign:"center" }}>
+          <button onClick={closeQrFull} aria-label="Close full screen"
+            style={{ position:"absolute", top:16, right:16, display:"inline-flex", alignItems:"center", gap:6, padding:"10px 14px", borderRadius:10, background:"#f1f3f1", color:"#1c2a22", border:"1px solid #dde3da", cursor:"pointer", fontSize:14, fontWeight:600, fontFamily:"inherit" }}>
+            <X size={16}/> Close
+          </button>
+          <div style={{ fontSize:"clamp(22px, 4vw, 40px)", fontWeight:700, color:"#1c2a22", marginBottom:6 }}>Scan to take the survey</div>
+          <div style={{ fontSize:"clamp(13px, 2vw, 20px)", color:"#5a6f62", marginBottom:24 }}>International Student Wellbeing Study · Missouri State University · Anonymous · About 5 minutes</div>
+          <img
+            src={`https://api.qrserver.com/v1/create-qr-code/?size=900x900&bgcolor=ffffff&color=1c2a22&data=${encodeURIComponent(surveyDeepLink)}`}
+            alt="Survey QR code"
+            style={{ display:"block", width:"min(65vh, 85vw)", height:"min(65vh, 85vw)", borderRadius:16, border:"6px solid #2f6b4f" }}
+          />
+          <a href={surveyDeepLink} target="_blank" rel="noopener noreferrer"
+            style={{ marginTop:20, fontSize:"clamp(13px, 2vw, 20px)", color:"#2f6b4f", wordBreak:"break-all", textDecoration:"underline" }}>
+            {surveyDeepLink}
+          </a>
+        </div>
+      )}
+
       <div style={{ fontSize: 18, fontWeight: 600, color: T.chalk, marginBottom: 2 }}>Survey</div>
       <div style={{ fontSize: 13, color: T.chalkDim, marginBottom: 14 }}>29 questions · 6–8 minutes · Anonymous · IRB approved ✓</div>
 
@@ -2390,20 +2431,34 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
             {surveyDeepLink ? (
               <>
                 <img
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=240x240&bgcolor=ffffff&color=1c2a22&data=${encodeURIComponent(surveyDeepLink)}`}
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=480x480&bgcolor=ffffff&color=1c2a22&data=${encodeURIComponent(surveyDeepLink)}`}
                   alt="Survey QR code"
-                  style={{ width:240, height:240, borderRadius:12, marginBottom:16, border:`4px solid ${T.amber}` }}
+                  onClick={openQrFull}
+                  style={{ display:"block", width:240, height:240, maxWidth:"100%", borderRadius:12, margin:"0 auto 16px", border:`4px solid ${T.amber}`, cursor:"zoom-in", background:"#fff" }}
                 />
-                <div style={{ fontSize:11, color:T.chalkDim, marginBottom:14, wordBreak:"break-all", maxWidth:280, margin:"0 auto 14px" }}>
+                <a
+                  href={surveyDeepLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ display:"block", fontSize:12, color:T.amber, textDecoration:"underline", wordBreak:"break-all", maxWidth:300, margin:"0 auto 16px" }}
+                >
                   {surveyDeepLink}
+                </a>
+                <div style={{ display:"flex", gap:8, justifyContent:"center", flexWrap:"wrap" }}>
+                  <button onClick={openQrFull} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"10px 16px", borderRadius:8, background:T.amber, color:"var(--on-primary)", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"inherit" }}>
+                    <Maximize2 size={14}/> Full screen
+                  </button>
+                  <a href={surveyDeepLink} target="_blank" rel="noopener noreferrer" style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"10px 16px", borderRadius:8, background:T.surface, color:T.chalk, border:`1px solid ${T.chalkFaint}`, fontSize:13, fontWeight:600, textDecoration:"none" }}>
+                    <ExternalLink size={14}/> Open survey
+                  </a>
+                  <button onClick={copyLink} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"10px 16px", borderRadius:8, background:copiedLink?T.blue:T.surface, color:copiedLink?"var(--on-primary)":T.chalk, border:`1px solid ${T.chalkFaint}`, cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"inherit" }}>
+                    {copiedLink ? <><Check size={14}/> Copied!</> : <><Copy size={14}/> Copy link</>}
+                  </button>
                 </div>
-                <button onClick={copyLink} style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"10px 20px", borderRadius:8, background:copiedLink?T.blue:T.amber, color:"var(--on-primary)", border:"none", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"inherit" }}>
-                  {copiedLink ? <><Check size={14}/> Link copied!</> : <><Copy size={14}/> Copy survey link</>}
-                </button>
               </>
             ) : (
               <>
-                <div style={{ width:240, height:240, borderRadius:12, background:T.bgDeep, border:`2px dashed ${T.chalkFaint}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:13, color:T.chalkDim, textAlign:"center", padding:20, lineHeight:1.6 }}>
+                <div style={{ width:240, height:240, borderRadius:12, background:T.bgDeep, border:`2px dashed ${T.chalkFaint}`, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 16px", fontSize:13, color:T.chalkDim, textAlign:"center", padding:20, lineHeight:1.6, maxWidth:"100%" }}>
                   Paste your deployed app URL below and the QR code will appear here instantly
                 </div>
               </>
