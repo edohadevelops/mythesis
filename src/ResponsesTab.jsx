@@ -15,10 +15,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { Download, RefreshCcw, Trash2, X, FileText } from "lucide-react";
+import { Download, RefreshCcw, Trash2, X, FileText, Upload, CheckCircle2, AlertTriangle } from "lucide-react";
 
-const TABLE = "thesis_responses";
+export const TABLES = { real: "thesis_responses", pseudo: "thesis_responses_pseudo" };
+const DS_LABEL = { real: "Real data", pseudo: "Pseudo data" };
 const PDF_GREEN = "#2f6b4f";
+const MAROON = "#6B2737";
 
 /* ─── Survey definition (matches the IRB instrument) ─────────────────── */
 const SECTIONS = [
@@ -131,7 +133,10 @@ function toCSV(rows, cols) {
 }
 
 /* ─── Data hook: loads + merges both storage locations ───────────────── */
-export function useAllResponses({ sbUrl, sbKey, localResponses = [], onDeleteLocal }) {
+export function useAllResponses({ sbUrl, sbKey, localResponses = [], onDeleteLocal, dataset = "real" }) {
+  const TABLE = TABLES[dataset] || TABLES.real;
+  // In-app and manual entries are real data, so they only join the real view
+  const local = dataset === "real" ? localResponses : [];
   const [tableRows, setTableRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -160,38 +165,63 @@ export function useAllResponses({ sbUrl, sbKey, localResponses = [], onDeleteLoc
       setTableRows(all);
       setLastLoaded(new Date());
     } catch (e) {
-      setError(`Couldn't load survey-page responses (${e.message}). In-app and manual entries are still shown. Check that reads are allowed on ${TABLE}.`);
+      setTableRows([]);
+      setError(dataset === "pseudo"
+        ? `Couldn't load pseudo data (${e.message}). Check that the ${TABLE} table exists and allows reads.`
+        : `Couldn't load survey-page responses (${e.message}). In-app and manual entries are still shown. Check that reads are allowed on ${TABLE}.`);
     }
     setLoading(false);
-  }, [sbUrl, headers]);
+  }, [sbUrl, headers, TABLE, dataset]);
 
   useEffect(() => { reload(); }, [reload]);
 
   const rows = useMemo(() => {
     const byId = new Map();
     tableRows.forEach((r) => byId.set(r.id, { ...r, _origin: "table" }));
-    (localResponses || []).forEach((r) => { if (!byId.has(r.id)) byId.set(r.id, { ...r, _origin: "app" }); });
+    (local || []).forEach((r) => { if (!byId.has(r.id)) byId.set(r.id, { ...r, _origin: "app" }); });
     const merged = [...byId.values()].sort((a, b) => String(b.timestamp || "").localeCompare(String(a.timestamp || "")));
     return enrich(merged);
-  }, [tableRows, localResponses]);
+  }, [tableRows, local]);
 
   const removeRow = useCallback(async (row) => {
     if (row._origin === "app") { onDeleteLocal?.(row.id); return; }
     const res = await fetch(`${sbUrl}/rest/v1/${TABLE}?id=eq.${encodeURIComponent(row.id)}`, { method: "DELETE", headers });
     if (!res.ok) { alert(`Delete failed: ${res.status}. The table may not allow deletes for this key — delete it in Supabase instead.`); return; }
     setTableRows((rs) => rs.filter((r) => r.id !== row.id));
-  }, [sbUrl, headers, onDeleteLocal]);
+  }, [sbUrl, headers, onDeleteLocal, TABLE]);
 
-  return { rows, loading, error, reload, lastLoaded, removeRow };
+  // Bulk insert. Returns { inserted, failed }.
+  const insertRows = useCallback(async (newRows) => {
+    let inserted = 0, failed = 0;
+    const post = (body) => fetch(`${sbUrl}/rest/v1/${TABLE}`, {
+      method: "POST", headers: { ...headers, Prefer: "return=minimal" }, body: JSON.stringify(body),
+    });
+    for (let i = 0; i < newRows.length; i += 200) {
+      const chunk = newRows.slice(i, i + 200);
+      let ok = false;
+      try { ok = (await post(chunk)).ok; } catch { ok = false; }
+      if (ok) { inserted += chunk.length; continue; }
+      // Chunk failed: retry one by one so a single bad row doesn't sink the rest
+      for (const row of chunk) {
+        try { (await post([row])).ok ? inserted++ : failed++; } catch { failed++; }
+      }
+    }
+    await reload();
+    return { inserted, failed };
+  }, [sbUrl, headers, TABLE, reload]);
+
+  return { rows, tableRows, loading, error, reload, lastLoaded, removeRow, insertRows, dataset, table: TABLE };
 }
 
 /* ─── Exports ────────────────────────────────────────────────────────── */
-function exportRawCSV(rows) {
+const fileTag = (ds) => (ds === "pseudo" ? "_pseudo" : "");
+
+function exportRawCSV(rows, ds) {
   const out = rows.map((r) => ({ ...r, origin: r._origin }));
-  downloadBlob(toCSV(out, ["id", "timestamp", "source", "origin", ...ALL_KEYS]), `thesis_responses_raw_${today()}.csv`, "text/csv");
+  downloadBlob(toCSV(out, ["id", "timestamp", "source", "origin", ...ALL_KEYS]), `thesis_responses${fileTag(ds)}_raw_${today()}.csv`, "text/csv");
 }
 
-function exportAnalysisCSV(rows) {
+function exportAnalysisCSV(rows, ds) {
   const out = rows.map((r) => {
     const o = {
       id: r.id, timestamp: r.timestamp, source: r.source || r._origin,
@@ -211,16 +241,18 @@ function exportAnalysisCSV(rows) {
   });
   const cols = ["id", "timestamp", "source", "country", "level", "time_in_us", "faith_community",
     ...SCALE_KEYS, "q22_r", "phq2", "gad2", "depressed", "flag_straightline", "flag_duplicate", "flag_incomplete"];
-  downloadBlob(toCSV(out, cols), `thesis_analysis_${today()}.csv`, "text/csv");
+  downloadBlob(toCSV(out, cols), `thesis_analysis${fileTag(ds)}_${today()}.csv`, "text/csv");
 }
 
-function exportRScript() {
+function exportRScript(ds) {
   const d = today();
+  const csv = `thesis_analysis${fileTag(ds)}_${d}.csv`;
   const r = `# ============================================================
 # Predictors of Mental Health Vulnerability Among International
 # Students — analysis script (generated ${d})
+# Dataset: ${ds === "pseudo" ? "PSEUDO DATA — for analysis development only. Not thesis results." : "Real survey data"}
 #
-# 1. Save this in the same folder as thesis_analysis_${d}.csv
+# 1. Save this in the same folder as ${csv}
 # 2. Run top to bottom
 # ============================================================
 
@@ -231,7 +263,7 @@ invisible(lapply(pkgs, library, character.only = TRUE))
 set.seed(42)
 
 # ---- 1. Load and clean ----------------------------------------
-dat <- read_csv("thesis_analysis_${d}.csv", show_col_types = FALSE)
+dat <- read_csv("${csv}", show_col_types = FALSE)
 
 cat("Rows loaded:", nrow(dat), "\\n")
 cat("Straight-liners:", sum(dat$flag_straightline), "\\n")
@@ -304,27 +336,35 @@ auc(roc_obj); ci.auc(roc_obj)
 plot(roc_obj, print.auc = TRUE)
 coords(roc_obj, "best", best.method = "youden", ret = c("threshold", "sensitivity", "specificity"))
 
-saveRDS(list(clean = clean, full = full, cv_fit = cv_fit, roc = roc_obj), "thesis_results.rds")
+saveRDS(list(clean = clean, full = full, cv_fit = cv_fit, roc = roc_obj), "thesis_results${fileTag(ds)}.rds")
 `;
-  downloadBlob(r, "thesis_analysis.R", "text/plain");
+  downloadBlob(r, `thesis_analysis${fileTag(ds)}.R`, "text/plain");
 }
 
-function pdfHeader(doc, title, subtitle) {
+const PSEUDO_RED = "#8a1c2b";
+function pdfHeader(doc, title, subtitle, ds) {
   const w = doc.internal.pageSize.getWidth();
-  doc.setFillColor(PDF_GREEN); doc.rect(0, 0, w, 62, "F");
+  doc.setFillColor(ds === "pseudo" ? PSEUDO_RED : PDF_GREEN); doc.rect(0, 0, w, 62, "F");
   doc.setTextColor("#FFFFFF");
   doc.setFont("helvetica", "bold"); doc.setFontSize(16); doc.text(title, 40, 31);
   doc.setFont("helvetica", "normal"); doc.setFontSize(10); doc.text(subtitle, 40, 48);
+  if (ds === "pseudo") {
+    doc.setFont("helvetica", "bold"); doc.setFontSize(10);
+    doc.text("PSEUDO DATA - for analysis development only", w - 40, 31, { align: "right" });
+    doc.setFont("helvetica", "normal");
+  }
   doc.setTextColor("#222222");
 }
 
-function pdfFooter(doc) {
+function pdfFooter(doc, ds) {
   const n = doc.getNumberOfPages();
   const w = doc.internal.pageSize.getWidth();
   const h = doc.internal.pageSize.getHeight();
   for (let i = 1; i <= n; i++) {
     doc.setPage(i); doc.setFontSize(8); doc.setTextColor("#888888");
-    doc.text("Confidential research data, IRB-FY2027-49. Anonymous responses.", 40, h - 20);
+    doc.text(ds === "pseudo"
+      ? "PSEUDO DATA - simulated responses for analysis development only. Not thesis results."
+      : "Confidential research data, IRB-FY2027-49. Anonymous responses.", 40, h - 20);
     doc.text(`Page ${i} of ${n}`, w - 40, h - 20, { align: "right" });
   }
 }
@@ -345,15 +385,16 @@ function countBy(rows, key) {
   return Object.entries(m).sort((a, b) => b[1] - a[1]);
 }
 
-function exportSummaryPDF(rows) {
+function exportSummaryPDF(rows, ds) {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  pdfHeader(doc, "Survey summary report", `First 90 thesis survey   |   Generated ${fmtDate(new Date())}`);
+  pdfHeader(doc, ds === "pseudo" ? "Survey summary report (pseudo data)" : "Survey summary report", `First 90 thesis survey   |   Generated ${fmtDate(new Date())}`, ds);
   const n = rows.length;
   const pct = (x) => (n ? `${((100 * x) / n).toFixed(1)}%` : "—");
   const atRisk = rows.filter((r) => r._atRisk).length;
   const flagged = rows.filter((r) => r._flags.length).length;
 
   tbl(doc, 84, ["Overview", "Value"], [
+    ["Dataset", DS_LABEL[ds] || DS_LABEL.real],
     ["Total responses", String(n)],
     ["Survey page / in-app or manual", `${rows.filter((r) => r._origin === "table").length} / ${rows.filter((r) => r._origin === "app").length}`],
     ["PHQ-2 >= 3 (outcome = 1)", `${atRisk} (${pct(atRisk)})`],
@@ -377,7 +418,7 @@ function exportSummaryPDF(rows) {
   }));
 
   doc.addPage();
-  pdfHeader(doc, "Item descriptives", "Means and standard deviations, all responses");
+  pdfHeader(doc, "Item descriptives", "Means and standard deviations, all responses", ds);
   tbl(doc, 84, ["Item", "Question", "n", "Mean", "SD"], items, {
     styles: { fontSize: 8.5, cellPadding: 4 },
     columnStyles: { 0: { cellWidth: 36 }, 2: { cellWidth: 30 }, 3: { cellWidth: 40 }, 4: { cellWidth: 40 } },
@@ -388,13 +429,13 @@ function exportSummaryPDF(rows) {
     tbl(doc, doc.lastAutoTable.finalY + 16, ["Response ID", "Submitted", "Flags"],
       fl.map((r) => [String(r.id).slice(0, 14), fmtDate(r.timestamp), r._flags.join(", ")]));
   }
-  pdfFooter(doc);
-  doc.save(`thesis_summary_report_${today()}.pdf`);
+  pdfFooter(doc, ds);
+  doc.save(`thesis_summary_report${fileTag(ds)}_${today()}.pdf`);
 }
 
-function exportResponsePDF(r) {
+function exportResponsePDF(r, ds) {
   const doc = new jsPDF({ unit: "pt", format: "letter" });
-  pdfHeader(doc, "Survey response", `ID ${String(r.id).slice(0, 20)}   |   Submitted ${fmtDate(r.timestamp)}`);
+  pdfHeader(doc, ds === "pseudo" ? "Survey response (pseudo data)" : "Survey response", `ID ${String(r.id).slice(0, 20)}   |   Submitted ${fmtDate(r.timestamp)}`, ds);
   tbl(doc, 84, ["Scores", ""], [
     ["PHQ-2", r._phq2 === null ? "—" : `${r._phq2}${r._atRisk ? "  (at or above cut-off of 3)" : ""}`],
     ["GAD-2", r._gad2 === null ? "—" : String(r._gad2)],
@@ -408,8 +449,250 @@ function exportResponsePDF(r) {
       items.map(([k, label]) => [`${k.toUpperCase()}. ${label}`, text(r[k]) || "—"]),
       { columnStyles: { 1: { cellWidth: 150 } } });
   });
-  pdfFooter(doc);
-  doc.save(`response_${String(r.id).slice(0, 12)}.pdf`);
+  pdfFooter(doc, ds);
+  doc.save(`response${fileTag(ds)}_${String(r.id).slice(0, 12)}.pdf`);
+}
+
+/* ─── Bulk import: validation + normalization ──────────────────────────
+   Import format = the survey page format, e.g. "q6": "1  Several days".
+   - Any "id" in the JSON is ignored; a new id is generated in the same
+     format as live survey responses: resp-<ms>-<5 random chars>.
+   - A bare number ("3") or a number with any label ("3 - Moderately") is
+     converted to the exact survey-page label so all data stays consistent.
+   - Duplicates = same timestamp + same 29 answers as a row already in the
+     table (or earlier in the same paste). They are skipped.
+──────────────────────────────────────────────────────────────────────── */
+const OPT = {
+  s4:  ["0  Not at all", "1  Several days", "2  Half the days", "3  Nearly every day"],
+  s3:  ["1  Hardly ever", "2  Sometimes", "3  Often"],
+  s5s: ["1  Not stressful", "2  Slightly", "3  Moderately", "4  Very", "5  Extremely"],
+  s5a: ["1  Strongly disagree", "2  Disagree", "3  Neutral", "4  Agree", "5  Strongly agree"],
+  q2:  ["Undergraduate", "Graduate (Master's)", "Graduate (PhD)", "Other"],
+  q3:  ["Less than 6 months", "6 to 12 months", "1 to 2 years", "More than 2 years"],
+  q5:  ["Yes", "No", "Still looking for one"],
+};
+const FIELD_OPTS = {
+  q2: OPT.q2, q3: OPT.q3, q5: OPT.q5,
+  q6: OPT.s4, q7: OPT.s4, q8: OPT.s4, q9: OPT.s4,
+  q10: OPT.s3, q11: OPT.s3,
+  q12: OPT.s5s, q13: OPT.s5s, q14: OPT.s5s, q15: OPT.s5s, q16: OPT.s5s, q17: OPT.s5s,
+};
+for (let i = 18; i <= 30; i++) FIELD_OPTS[`q${i}`] = OPT.s5a;
+const META_KEYS = new Set(["id", "timestamp", "source"]);
+
+const squash = (v) => String(v).toLowerCase().replace(/[–—]/g, "-").replace(/\s+/g, " ").trim();
+
+function normalizeValue(key, raw) {
+  if (raw === null || raw === undefined || String(raw).trim() === "") return { error: "missing" };
+  const v = String(raw).trim();
+  if (key === "q1") return { value: v };
+  const opts = FIELD_OPTS[key];
+  if (SCALE_KEYS.includes(key)) {
+    const m = v.match(/^(\d)/);
+    if (!m) return { error: `"${v}" is not a scale answer` };
+    const hit = opts.find((o) => o[0] === m[1]);
+    return hit ? { value: hit } : { error: `"${v}" is out of range (${opts[0][0]}–${opts[opts.length - 1][0]})` };
+  }
+  const want = squash(v).replace(/^6 ?- ?12 months$/, "6 to 12 months").replace(/^1 ?- ?2 years$/, "1 to 2 years");
+  const hit = opts.find((o) => squash(o) === want);
+  return hit ? { value: hit } : { error: `"${v}" is not one of: ${opts.join(" / ")}` };
+}
+
+const fingerprint = (r) => {
+  const t = r.timestamp ? new Date(r.timestamp) : null;
+  const ts = t && !isNaN(t) ? t.toISOString() : "";
+  return ts + "|" + CORE_KEYS.map((k) => (r[k] === null || r[k] === undefined ? "" : String(r[k]).trim())).join("|");
+};
+
+function makeId(used) {
+  let id;
+  do { id = `resp-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`; } while (used.has(id));
+  used.add(id);
+  return id;
+}
+
+function validateImport(text, dataset, existingRows) {
+  let parsed;
+  try { parsed = JSON.parse(text); }
+  catch (e) { return { fatal: `This isn't valid JSON: ${e.message}` }; }
+  if (!Array.isArray(parsed)) {
+    if (parsed && typeof parsed === "object") parsed = [parsed];
+    else return { fatal: "The JSON must be an array of response objects: [ { ... }, { ... } ]" };
+  }
+  if (!parsed.length) return { fatal: "The array is empty." };
+
+  const seen = new Set((existingRows || []).map(fingerprint));
+  const usedIds = new Set((existingRows || []).map((r) => r.id));
+  const ready = [], invalid = [], dupes = [], unknownKeys = new Set();
+  let pseudoInReal = 0;
+  const defaultSource = dataset === "pseudo" ? "pseudo-data" : "paper-form";
+
+  parsed.forEach((obj, i) => {
+    const rowNo = i + 1;
+    if (!obj || typeof obj !== "object" || Array.isArray(obj)) { invalid.push({ rowNo, issues: ["not an object"] }); return; }
+    Object.keys(obj).forEach((k) => { if (!META_KEYS.has(k) && !CORE_KEYS.includes(k)) unknownKeys.add(k); });
+
+    const issues = [];
+    const t = obj.timestamp ? new Date(obj.timestamp) : null;
+    if (!t || isNaN(t)) issues.push(obj.timestamp ? `timestamp "${obj.timestamp}" is not a valid date` : "timestamp is missing");
+
+    const out = {};
+    CORE_KEYS.forEach((k) => {
+      const r = normalizeValue(k, obj[k]);
+      if (r.error) issues.push(`${k.toUpperCase()}: ${r.error}`); else out[k] = r.value;
+    });
+    if (issues.length) { invalid.push({ rowNo, issues }); return; }
+
+    const source = obj.source && String(obj.source).trim() ? String(obj.source).trim() : defaultSource;
+    if (dataset === "real" && /pseudo/i.test(source)) pseudoInReal++;
+    const row = { timestamp: t.toISOString(), source, ...out };
+    const fp = fingerprint(row);
+    if (seen.has(fp)) { dupes.push(rowNo); return; }
+    seen.add(fp);
+    ready.push({ id: makeId(usedIds), ...row });
+  });
+
+  return { total: parsed.length, ready, invalid, dupes, unknownKeys: [...unknownKeys], pseudoInReal, sample: parsed[0] };
+}
+
+function BulkImportModal({ dataset, table, existingRows, insertRows, onClose }) {
+  const [text, setText]       = useState("");
+  const [check, setCheck]     = useState(null);
+  const [busy, setBusy]       = useState(false);
+  const [summary, setSummary] = useState(null);
+  const isPseudo = dataset === "pseudo";
+
+  useEffect(() => {
+    const k = (e) => e.key === "Escape" && !busy && onClose();
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [busy, onClose]);
+
+  const runValidate = () => { setSummary(null); setCheck(validateImport(text, dataset, existingRows)); };
+  const blocked = check && !check.fatal && check.pseudoInReal > 0;
+  const canImport = check && !check.fatal && !blocked && check.ready.length > 0 && !busy;
+
+  const runImport = async () => {
+    setBusy(true);
+    const { inserted, failed } = await insertRows(check.ready);
+    setSummary({ inserted, failed: failed + check.invalid.length, dupes: check.dupes.length });
+    setCheck(null);
+    setText("");
+    setBusy(false);
+  };
+
+  const box = { border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", fontSize: 12, lineHeight: 1.55, marginBottom: 10 };
+
+  return (
+    <div role="dialog" aria-modal="true" aria-label="Bulk import JSON"
+      style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={() => !busy && onClose()} style={{ position: "absolute", inset: 0, background: "rgba(8,20,15,0.55)" }} />
+      <div style={{ position: "relative", width: "100%", maxWidth: 640, maxHeight: "92vh", overflowY: "auto", background: "var(--bg)",
+        border: `1px solid ${C.border}`, borderRadius: 14, padding: "18px 18px 20px" }}>
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Bulk Import JSON</div>
+            <div style={{ fontSize: 12, color: C.dim }}>
+              Importing into <strong style={{ color: isPseudo ? MAROON : C.text }}>{isPseudo ? "Pseudo Data" : "Real Data"}</strong> ({table})
+            </div>
+          </div>
+          <button onClick={onClose} disabled={busy} aria-label="Close" style={{ ...btn(false), padding: 8 }}><X size={15} /></button>
+        </div>
+
+        {summary && (
+          <div style={{ ...box, background: C.primaryDim, borderColor: "transparent", display: "flex", gap: 8, alignItems: "flex-start" }}>
+            <CheckCircle2 size={16} style={{ color: C.primary, flexShrink: 0, marginTop: 1 }} />
+            <div style={{ color: C.text }}>
+              <strong>{summary.inserted} inserted, {summary.failed} failed, {summary.dupes} duplicates skipped.</strong>
+              {summary.failed > 0 && <div style={{ color: C.dim }}>Failed rows were not imported. Fix them and paste just those rows again.</div>}
+            </div>
+          </div>
+        )}
+
+        <label htmlFor="bulk-json" style={{ display: "block", fontSize: 12, fontWeight: 600, color: C.text, marginBottom: 5 }}>
+          Paste a JSON array of responses
+        </label>
+        <textarea id="bulk-json" value={text} onChange={(e) => { setText(e.target.value); setCheck(null); }}
+          placeholder={'[\n  { "timestamp": "2026-10-01T10:00:00.000Z", "source": "' + (isPseudo ? "pseudo-data" : "paper-form") + '", "q1": "Nigeria", "q2": "Graduate (Master\'s)", ... },\n  { ... }\n]'}
+          spellCheck={false}
+          style={{ width: "100%", minHeight: 220, padding: "10px 12px", borderRadius: 10, border: `1px solid ${C.border}`, background: C.deep,
+            color: C.text, fontSize: 12, fontFamily: "ui-monospace, Menlo, Consolas, monospace", resize: "vertical", marginBottom: 10 }} />
+        <div style={{ fontSize: 11, color: C.dim, marginBottom: 12, lineHeight: 1.5 }}>
+          Any <code>id</code> in the JSON is ignored, and each row gets a new ID in the same format as live survey responses.
+          Rows need a <code>timestamp</code> and answers to all 29 questions. If <code>source</code> is left out it is set to "{isPseudo ? "pseudo-data" : "paper-form"}".
+        </div>
+
+        {check?.fatal && (
+          <div role="alert" style={{ ...box, background: C.dangerDim, borderColor: "transparent", color: C.text }}>{check.fatal}</div>
+        )}
+
+        {check && !check.fatal && (
+          <div>
+            {blocked && (
+              <div role="alert" style={{ ...box, background: C.dangerDim, borderColor: "transparent", color: C.text, display: "flex", gap: 8 }}>
+                <AlertTriangle size={16} style={{ color: C.danger, flexShrink: 0, marginTop: 1 }} />
+                <div>
+                  <strong>Import stopped.</strong> {check.pseudoInReal} row{check.pseudoInReal === 1 ? " is" : "s are"} marked as pseudo data, but you are viewing Real Data.
+                  Switch to Pseudo Data at the top of the Survey tab, then import again. Pseudo rows would be impossible to tell apart from real ones once they are in the real table.
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+              {[["Rows found", check.total, C.text], ["Ready to import", check.ready.length, C.primary],
+                ["Duplicates", check.dupes.length, C.dim], ["Invalid", check.invalid.length, check.invalid.length ? C.danger : C.dim]].map(([l, v, col]) => (
+                <div key={l} style={{ flex: 1, minWidth: 110, background: C.surface2, borderRadius: 10, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 11, color: C.dim }}>{l}</div>
+                  <div style={{ fontSize: 20, fontWeight: 700, color: col }}>{v}</div>
+                </div>
+              ))}
+            </div>
+
+            {check.invalid.length > 0 && (
+              <div style={{ ...box, borderColor: C.danger }}>
+                <div style={{ fontWeight: 700, color: C.danger, marginBottom: 4 }}>
+                  {check.invalid.length} row{check.invalid.length === 1 ? "" : "s"} won't be imported:
+                </div>
+                {check.invalid.slice(0, 6).map((r) => (
+                  <div key={r.rowNo} style={{ color: C.text }}>Row {r.rowNo}: {r.issues.slice(0, 3).join("; ")}{r.issues.length > 3 ? ` (+${r.issues.length - 3} more)` : ""}</div>
+                ))}
+                {check.invalid.length > 6 && <div style={{ color: C.dim }}>…and {check.invalid.length - 6} more.</div>}
+              </div>
+            )}
+
+            {check.unknownKeys.length > 0 && (
+              <div style={{ ...box, color: C.dim }}>
+                Ignored fields not in the survey: {check.unknownKeys.join(", ")}
+              </div>
+            )}
+
+            {check.sample && typeof check.sample === "object" && (
+              <details style={{ ...box }}>
+                <summary style={{ cursor: "pointer", fontWeight: 600, color: C.text }}>First row preview</summary>
+                <div style={{ marginTop: 8, display: "grid", gridTemplateColumns: "auto 1fr", gap: "2px 12px" }}>
+                  {["timestamp", "source", ...CORE_KEYS].map((k) => (
+                    <React.Fragment key={k}>
+                      <span style={{ color: C.dim }}>{k}</span>
+                      <span style={{ color: C.text, wordBreak: "break-word" }}>{check.sample[k] === undefined ? "—" : String(check.sample[k])}</span>
+                    </React.Fragment>
+                  ))}
+                </div>
+              </details>
+            )}
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
+          <button onClick={runValidate} disabled={!text.trim() || busy} style={{ ...btn(false), opacity: text.trim() && !busy ? 1 : 0.5 }}>
+            Validate
+          </button>
+          <button onClick={runImport} disabled={!canImport} style={{ ...btn(true), opacity: canImport ? 1 : 0.5 }}>
+            <Upload size={13} /> {busy ? "Importing…" : `Import ${check && !check.fatal ? check.ready.length : ""} responses`.replace("  ", " ")}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 /* ─── UI ─────────────────────────────────────────────────────────────── */
@@ -437,7 +720,7 @@ function Chip({ children, risk }) {
   );
 }
 
-function DetailPanel({ row, onClose, onDelete }) {
+function DetailPanel({ row, onClose, onDelete, ds }) {
   useEffect(() => {
     const k = (e) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", k);
@@ -456,7 +739,7 @@ function DetailPanel({ row, onClose, onDelete }) {
             <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Response details</div>
             <div style={{ fontSize: 12, color: C.dim }}>{fmtDate(row.timestamp)}</div>
             <div style={{ fontSize: 10, color: C.dim, wordBreak: "break-all" }}>
-              {row._origin === "table" ? "Survey page" : row.source === "manual" ? "Manual entry" : "In-app form"} · {row.id}
+              {ds === "pseudo" ? `Pseudo data${row.source ? ` (${row.source})` : ""}` : row.source === "paper-form" ? "Paper form" : row._origin === "table" ? "Survey page" : row.source === "manual" ? "Manual entry" : "In-app form"} · {row.id}
             </div>
           </div>
           <button onClick={onClose} aria-label="Close" style={{ ...btn(false), padding: 8 }}><X size={15} /></button>
@@ -479,7 +762,7 @@ function DetailPanel({ row, onClose, onDelete }) {
         )}
 
         <div style={{ padding: "0 18px 12px", display: "flex", gap: 8 }}>
-          <button onClick={() => exportResponsePDF(row)} style={btn(true)}><FileText size={13} /> Download PDF</button>
+          <button onClick={() => exportResponsePDF(row, ds)} style={btn(true)}><FileText size={13} /> Download PDF</button>
           <button
             onClick={() => { if (window.confirm("Delete this response permanently? This cannot be undone.")) { onDelete(row); onClose(); } }}
             style={{ ...btn(false), color: C.danger }}
@@ -510,7 +793,9 @@ function DetailPanel({ row, onClose, onDelete }) {
   );
 }
 
-export default function ResponsesTab({ rows, loading, error, reload, lastLoaded, removeRow }) {
+export default function ResponsesTab({ rows, tableRows = [], loading, error, reload, lastLoaded, removeRow, insertRows, dataset = "real", table }) {
+  const ds = dataset;
+  const [importOpen, setImportOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
@@ -529,10 +814,10 @@ export default function ResponsesTab({ rows, loading, error, reload, lastLoaded,
 
   const flagged = rows.filter((r) => r._flags.length).length;
   const downloads = [
-    ["Summary report (PDF)", () => exportSummaryPDF(rows)],
-    ["Analysis-ready data (CSV)", () => exportAnalysisCSV(rows)],
-    ["R analysis script (.R)", exportRScript],
-    ["Raw responses (CSV)", () => exportRawCSV(rows)],
+    ["Summary report (PDF)", () => exportSummaryPDF(rows, ds)],
+    ["Analysis-ready data (CSV)", () => exportAnalysisCSV(rows, ds)],
+    ["R analysis script (.R)", () => exportRScript(ds)],
+    ["Raw responses (CSV)", () => exportRawCSV(rows, ds)],
   ];
 
   return (
@@ -540,11 +825,14 @@ export default function ResponsesTab({ rows, loading, error, reload, lastLoaded,
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>
         <div style={{ flex: 1, minWidth: 140 }}>
-          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>All responses</div>
+          <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{ds === "pseudo" ? "Pseudo responses" : "All responses"}</div>
           <div style={{ fontSize: 11, color: C.dim }}>
             {loading ? "Loading…" : `${flagged} need a look · ${rows.length - flagged} clean${lastLoaded ? ` · updated ${fmtDate(lastLoaded)}` : ""}`}
           </div>
         </div>
+        <button onClick={() => setImportOpen(true)} style={btn(false)}>
+          <Upload size={13} /> Bulk Import JSON
+        </button>
         <button onClick={reload} disabled={loading} style={{ ...btn(false), opacity: loading ? 0.5 : 1 }}>
           <RefreshCcw size={13} /> Refresh
         </button>
@@ -639,7 +927,16 @@ export default function ResponsesTab({ rows, loading, error, reload, lastLoaded,
         </div>
       )}
 
-      {selected && <DetailPanel row={selected} onClose={() => setSelected(null)} onDelete={removeRow} />}
+      {selected && <DetailPanel row={selected} onClose={() => setSelected(null)} onDelete={removeRow} ds={ds} />}
+      {importOpen && (
+        <BulkImportModal
+          dataset={ds}
+          table={table}
+          existingRows={tableRows}
+          insertRows={insertRows}
+          onClose={() => setImportOpen(false)}
+        />
+      )}
     </div>
   );
 }
