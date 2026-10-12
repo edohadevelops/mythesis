@@ -60,6 +60,8 @@ const DARK = {
   "--info":"#7fb8c9","--info-dim":"rgba(127,184,201,0.16)","--on-primary":"#0e1f16",
 };
 
+const MSU_MAROON = "#6B2737";
+
 /* ─── SUPABASE ───────────────────────────────────────────────────────── */
 const SB_URL = "https://sonbphyeomzzcdyuiotl.supabase.co";
 const SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNvbmJwaHllb216emNkeXVpb3RsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMzkxMjksImV4cCI6MjA4ODgxNTEyOX0.CtcZAFtqCQUOrzPBfhSfN5BZ1EQDJFVxa-FsjMX5IRg";
@@ -2301,7 +2303,7 @@ function FundingView({ fundingStatus, onToggle }) {
      - thesis_responses table (public survey.html / QR code)
      - thesis_state "responses" (in-app form + manual entries)
 ──────────────────────────────────────────────────────────────────────── */
-function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetAppUrl }) {
+function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetAppUrl, dataSource = "real", onSetDataSource }) {
   const [tab, setTab]             = useState("qr");
   const [form, setForm]           = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -2330,7 +2332,8 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
     return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("fullscreenchange", onFsChange); };
   }, [qrFull]);
 
-  const all = useAllResponses({ sbUrl: SB_URL, sbKey: SB_KEY, localResponses: responses, onDeleteLocal: onDeleteResponse });
+  const isPseudo = dataSource === "pseudo";
+  const all = useAllResponses({ sbUrl: SB_URL, sbKey: SB_KEY, localResponses: responses, onDeleteLocal: onDeleteResponse, dataset: dataSource });
 
   const sections    = [...new Set(SURVEY_FIELDS.map((f) => f.section))];
   const totalCount  = all.rows.length;
@@ -2396,6 +2399,30 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
 
       <div style={{ fontSize: 18, fontWeight: 600, color: T.chalk, marginBottom: 2 }}>Survey</div>
       <div style={{ fontSize: 13, color: T.chalkDim, marginBottom: 14 }}>29 questions · 6–8 minutes · Anonymous · IRB approved ✓</div>
+
+      {/* Data source toggle — decides which table every count, table, export and report reads from */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", marginBottom:12 }}>
+        <span style={{ fontSize:13, fontWeight:600, color:T.chalk }}>Viewing:</span>
+        <div role="radiogroup" aria-label="Data source" style={{ display:"flex", border:`1.5px solid ${MSU_MAROON}`, borderRadius:99, padding:3, background:T.surface }}>
+          {[["real","Real Data"],["pseudo","Pseudo Data"]].map(([v,l]) => {
+            const on = dataSource === v;
+            return (
+              <button key={v} role="radio" aria-checked={on} onClick={() => onSetDataSource?.(v)}
+                style={{ padding:"6px 14px", borderRadius:99, border:"none", cursor:"pointer", fontFamily:"inherit", fontSize:12, fontWeight:on?700:500,
+                  background:on?MSU_MAROON:"transparent", color:on?"#ffffff":T.chalkDim }}>
+                {l}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {isPseudo && (
+        <div role="status" style={{ display:"flex", alignItems:"center", gap:8, background:MSU_MAROON, color:"#ffffff", borderRadius:10, padding:"10px 14px", marginBottom:14, fontSize:13, fontWeight:700, letterSpacing:"0.02em" }}>
+          <AlertCircle size={16} style={{ flexShrink:0 }} />
+          PSEUDO DATA — for analysis development only
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display:"flex", gap:4, background:T.surface, borderRadius:99, padding:4, marginBottom:16, border:`1px solid ${T.chalkFaint}` }}>
@@ -2582,9 +2609,11 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
           </div>
 
           <div style={{ display:"flex", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+            {!isPseudo && (
             <button onClick={() => setManualOpen((o) => !o)} style={{ display:"flex", alignItems:"center", gap:5, padding:"8px 12px", borderRadius:8, background:T.amber, color:"var(--on-primary)", border:"none", cursor:"pointer", fontSize:12, fontFamily:"inherit" }}>
               <Plus size={13}/> Manual entry
             </button>
+            )}
           </div>
 
           {/* EPV bar */}
@@ -2600,7 +2629,7 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
           </Card>
 
           {/* Manual entry */}
-          {manualOpen && (
+          {manualOpen && !isPseudo && (
             <Card style={{ marginBottom:14 }}>
               <div style={{ fontSize:13, fontWeight:600, color:T.chalk, marginBottom:10 }}>Manual entry — paper survey responses</div>
               {SURVEY_FIELDS.map((field) => {
@@ -2903,6 +2932,7 @@ function ThesisAppInner() {
   const [responses,     setResponses]    = useState([]);
   const [googleFormLink,setGoogleFormLink]= useState("");
   const [surveyLink,    setSurveyLink2]   = useState("");
+  const [dataSource,    setDataSource]   = useState("real");
   const [fundingStatus, setFundingStatus]= useState({});
   const [theme,         setTheme]        = useState("auto");
   const [fontSize,      setFontSize]     = useState(2);
@@ -2923,7 +2953,7 @@ function ThesisAppInner() {
         savedDefAns, savedDefDone, savedPractice,
         savedGloria, savedTheme, savedFontSize,
         savedNotif, savedLastModal, savedFunding,
-        savedResponses, savedGFormLink, savedSurveyLink2,
+        savedResponses, savedGFormLink, savedSurveyLink2, savedDataSource,
       ] = await Promise.all([
         sbLoad("tasks", null), sbLoad("ch-status", {}), sbLoad("ch-notes", {}),
         sbLoad("irb", {}), sbLoad("sessions", []),
@@ -2932,7 +2962,7 @@ function ThesisAppInner() {
         sbLoad("gloria", ""), sbLoad("theme", "auto"), sbLoad("font-size", 2),
         sbLoad("notif-enabled", false), sbLoad("last-modal", null),
         sbLoad("funding", {}),
-        sbLoad("responses", []), sbLoad("google-form-link", ""), sbLoad("survey-link2", ""),
+        sbLoad("responses", []), sbLoad("google-form-link", ""), sbLoad("survey-link2", ""), sbLoad("data-source", "real"),
       ]);
 
       setTasks(savedTasks?.length ? savedTasks : buildTaskPlan());
@@ -2954,6 +2984,7 @@ function ThesisAppInner() {
       setResponses(savedResponses || []);
       setGoogleFormLink(savedGFormLink || '');
       setSurveyLink2(savedSurveyLink2 || '');
+      setDataSource(savedDataSource === "pseudo" ? "pseudo" : "real");
 
       const today = TODAY();
       if (savedLastModal !== today) {
@@ -3001,6 +3032,7 @@ function ThesisAppInner() {
   const addResponse    = async (r)    => { const n = [...responses, r]; setResponses(n); sbSave("responses", n); };
   const deleteResponse = (id)         => { const n = responses.filter((r) => r.id !== id); setResponses(n); sbSave("responses", n); };
   const setGFormLink   = (l)          => { setGoogleFormLink(l); sbSave("google-form-link", l); };
+  const setDataSourceS = (v)          => { setDataSource(v); sbSave("data-source", v); };
   const setThemeS      = (t)          => { setTheme(t);    sbSave("theme", t); };
   const setFontSizeS   = (s)          => { setFontSize(s); sbSave("font-size", s); };
 
@@ -3161,7 +3193,7 @@ function ThesisAppInner() {
         {view === "analysis"   && <AnalysisView rStatus={rStatus} onToggleStep={toggleRStep} rNotes={rNotes} onUpdateNote={updateRNote} aucValue={aucValue} onSetAuc={saveAuc} />}
         {view === "sessions"   && <SessionsView sessions={sessions} onAdd={addSession} onDelete={deleteSession} />}
         {view === "defense"    && <DefenseView defenseAnswers={defAnswers} onUpdateAnswer={updateDefAns} defenseDone={defDone} onToggleDefense={toggleDefDone} practiceLog={practiceLog} onAddPractice={addPractice} />}
-        {view === "survey"     && <SurveyView responses={responses} onAddResponse={addResponse} onDeleteResponse={deleteResponse} appUrl={googleFormLink} onSetAppUrl={setGFormLink} />}
+        {view === "survey"     && <SurveyView responses={responses} onAddResponse={addResponse} onDeleteResponse={deleteResponse} appUrl={googleFormLink} onSetAppUrl={setGFormLink} dataSource={dataSource} onSetDataSource={setDataSourceS} />}
         {view === "motivation" && <MotivationView gloriaNote={gloriaNote} onSetGloriaNote={saveGloria} />}
         {view === "settings"   && <SettingsView theme={theme} onSetTheme={setThemeS} fontSize={fontSize} onSetFontSize={setFontSizeS} onReset={resetAll} onExport={exportBackup} onImport={importBackup} notifEnabled={notifEnabled} onEnableNotif={enableNotif} onDisableNotif={disableNotif} />}
 
