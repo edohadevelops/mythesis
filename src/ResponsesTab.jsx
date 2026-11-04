@@ -133,7 +133,7 @@ function toCSV(rows, cols) {
 }
 
 /* ─── Data hook: loads + merges both storage locations ───────────────── */
-export function useAllResponses({ sbUrl, sbKey, localResponses = [], onDeleteLocal, dataset = "real" }) {
+export function useAllResponses({ sbUrl, sbKey, localResponses = [], onDeleteLocal, onDeleteLocalMany, dataset = "real" }) {
   const TABLE = TABLES[dataset] || TABLES.real;
   // In-app and manual entries are real data, so they only join the real view
   const local = dataset === "real" ? localResponses : [];
@@ -183,12 +183,42 @@ export function useAllResponses({ sbUrl, sbKey, localResponses = [], onDeleteLoc
     return enrich(merged);
   }, [tableRows, local]);
 
+  // Bulk delete. Supabase returns success even when its rules block a delete,
+  // so we ask it to send back the rows it actually removed and count those.
+  const removeRows = useCallback(async (targets) => {
+    const localIds = targets.filter((r) => r._origin === "app").map((r) => r.id);
+    const tableIds = targets.filter((r) => r._origin !== "app").map((r) => r.id);
+    let deleted = 0, failed = 0;
+    const gone = new Set();
+
+    if (localIds.length) {
+      if (onDeleteLocalMany) onDeleteLocalMany(localIds);
+      else localIds.forEach((id) => onDeleteLocal?.(id));
+      deleted += localIds.length;
+    }
+
+    for (let i = 0; i < tableIds.length; i += 100) {
+      const chunk = tableIds.slice(i, i + 100);
+      const list = chunk.map((id) => `"${String(id).replace(/"/g, '""')}"`).join(",");
+      try {
+        const res = await fetch(`${sbUrl}/rest/v1/${TABLE}?id=in.(${encodeURIComponent(list)})&select=id`, {
+          method: "DELETE", headers: { ...headers, Prefer: "return=representation" },
+        });
+        if (!res.ok) { failed += chunk.length; continue; }
+        const removed = await res.json().catch(() => []);
+        removed.forEach((r) => gone.add(r.id));
+        deleted += removed.length;
+        failed += chunk.length - removed.length;
+      } catch { failed += chunk.length; }
+    }
+    if (gone.size) setTableRows((rs) => rs.filter((r) => !gone.has(r.id)));
+    return { deleted, failed, blocked: tableIds.length > 0 && gone.size === 0 };
+  }, [sbUrl, headers, onDeleteLocal, onDeleteLocalMany, TABLE]);
+
   const removeRow = useCallback(async (row) => {
-    if (row._origin === "app") { onDeleteLocal?.(row.id); return; }
-    const res = await fetch(`${sbUrl}/rest/v1/${TABLE}?id=eq.${encodeURIComponent(row.id)}`, { method: "DELETE", headers });
-    if (!res.ok) { alert(`Delete failed: ${res.status}. The table may not allow deletes for this key — delete it in Supabase instead.`); return; }
-    setTableRows((rs) => rs.filter((r) => r.id !== row.id));
-  }, [sbUrl, headers, onDeleteLocal, TABLE]);
+    const { blocked, failed } = await removeRows([row]);
+    if (blocked || failed) alert("This response wasn't deleted because the database doesn't allow deletes from the app. Run the delete-permission SQL in Supabase, or delete the row there instead.");
+  }, [removeRows]);
 
   // Bulk insert. Returns { inserted, failed }.
   const insertRows = useCallback(async (newRows) => {
@@ -210,7 +240,7 @@ export function useAllResponses({ sbUrl, sbKey, localResponses = [], onDeleteLoc
     return { inserted, failed };
   }, [sbUrl, headers, TABLE, reload]);
 
-  return { rows, tableRows, loading, error, reload, lastLoaded, removeRow, insertRows, dataset, table: TABLE };
+  return { rows, tableRows, loading, error, reload, lastLoaded, removeRow, removeRows, insertRows, dataset, table: TABLE };
 }
 
 /* ─── Exports ────────────────────────────────────────────────────────── */
@@ -793,8 +823,89 @@ function DetailPanel({ row, onClose, onDelete, ds }) {
   );
 }
 
-export default function ResponsesTab({ rows, tableRows = [], loading, error, reload, lastLoaded, removeRow, insertRows, dataset = "real", table }) {
+/* ─── Bulk delete confirmation ─────────────────────────────────────── */
+function DeleteConfirmModal({ count, total, all, dataset, rowsToBackup, onCancel, onConfirm }) {
+  const [typed, setTyped] = useState("");
+  const [busy, setBusy]   = useState(false);
+  const isReal = dataset !== "pseudo";
+  const needsTyping = isReal || all;
+  const ok = !needsTyping || typed.trim().toUpperCase() === "DELETE";
+  const label = isReal ? "Real Data" : "Pseudo Data";
+
+  useEffect(() => {
+    const k = (e) => e.key === "Escape" && !busy && onCancel();
+    window.addEventListener("keydown", k);
+    return () => window.removeEventListener("keydown", k);
+  }, [busy, onCancel]);
+
+  return (
+    <div role="alertdialog" aria-modal="true" aria-labelledby="del-title"
+      style={{ position: "fixed", inset: 0, zIndex: 80, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={() => !busy && onCancel()} style={{ position: "absolute", inset: 0, background: "rgba(8,20,15,0.6)" }} />
+      <div style={{ position: "relative", width: "100%", maxWidth: 440, background: "var(--bg)", border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 20px 18px" }}>
+        <div style={{ display: "flex", gap: 10, alignItems: "flex-start", marginBottom: 12 }}>
+          <AlertTriangle size={22} style={{ color: C.danger, flexShrink: 0, marginTop: 2 }} />
+          <div>
+            <div id="del-title" style={{ fontSize: 16, fontWeight: 700, color: C.text, marginBottom: 4 }}>
+              {all ? `Delete all ${count} rows?` : `Delete ${count} selected ${count === 1 ? "row" : "rows"}?`}
+            </div>
+            <div style={{ fontSize: 13, color: C.text, lineHeight: 1.55 }}>
+              {all ? "Every response" : `${count} of ${total} responses`} in <strong style={{ color: isReal ? C.danger : MAROON }}>{label}</strong> will be permanently removed. This can't be undone.
+            </div>
+          </div>
+        </div>
+
+        <button onClick={() => exportRawCSV(rowsToBackup, dataset)} style={{ ...btn(false), width: "100%", justifyContent: "center", marginBottom: 12 }}>
+          <Download size={13} /> Download a backup of these rows first
+        </button>
+
+        {needsTyping && (
+          <div style={{ marginBottom: 14 }}>
+            <label htmlFor="del-confirm" style={{ display: "block", fontSize: 12, color: C.text, marginBottom: 5 }}>
+              Type <strong>DELETE</strong> to confirm
+            </label>
+            <input id="del-confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" autoCapitalize="characters"
+              style={{ width: "100%", padding: "9px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.deep, color: C.text, fontSize: 14, fontFamily: "inherit" }} />
+          </div>
+        )}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <button onClick={onCancel} disabled={busy} style={btn(false)}>Cancel</button>
+          <button
+            onClick={async () => { setBusy(true); await onConfirm(); }}
+            disabled={!ok || busy}
+            style={{ ...btn(true), background: C.danger, color: "#fff", opacity: ok && !busy ? 1 : 0.5 }}>
+            <Trash2 size={13} /> {busy ? "Deleting…" : all ? `Delete all ${count}` : `Delete ${count}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ResponsesTab({ rows, tableRows = [], loading, error, reload, lastLoaded, removeRow, removeRows, insertRows, dataset = "real", table }) {
   const ds = dataset;
+  const [picked, setPicked]         = useState(() => new Set());
+  const [confirmDel, setConfirmDel] = useState(null); // { all: bool }
+  const [delResult, setDelResult]   = useState(null);
+
+  // Start fresh when switching between real and pseudo data
+  useEffect(() => { setPicked(new Set()); setDelResult(null); }, [ds]);
+  // Drop selections for rows that no longer exist
+  useEffect(() => {
+    setPicked((p) => { const ids = new Set(rows.map((r) => r.id)); const n = new Set([...p].filter((id) => ids.has(id))); return n.size === p.size ? p : n; });
+  }, [rows]);
+
+  const togglePick = (id) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const pickedRows = rows.filter((r) => picked.has(r.id));
+
+  const runDelete = async () => {
+    const targets = confirmDel?.all ? rows : pickedRows;
+    const res = await removeRows(targets);
+    setConfirmDel(null);
+    setPicked(new Set());
+    setDelResult(res);
+  };
   const [importOpen, setImportOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState("all");
@@ -811,6 +922,14 @@ export default function ResponsesTab({ rows, tableRows = [], loading, error, rel
       return [r.q1, r.q2, r.q3, r.q5, r.source, r.id].some((v) => v && String(v).toLowerCase().includes(q));
     });
   }, [rows, query, filter]);
+
+  const allVisiblePicked = visible.length > 0 && visible.every((r) => picked.has(r.id));
+  const someVisiblePicked = visible.some((r) => picked.has(r.id));
+  const toggleAllVisible = () => setPicked((p) => {
+    const n = new Set(p);
+    if (allVisiblePicked) visible.forEach((r) => n.delete(r.id)); else visible.forEach((r) => n.add(r.id));
+    return n;
+  });
 
   const flagged = rows.filter((r) => r._flags.length).length;
   const downloads = [
@@ -832,6 +951,10 @@ export default function ResponsesTab({ rows, tableRows = [], loading, error, rel
         </div>
         <button onClick={() => setImportOpen(true)} style={btn(false)}>
           <Upload size={13} /> Bulk Import JSON
+        </button>
+        <button onClick={() => setConfirmDel({ all: true })} disabled={!rows.length}
+          style={{ ...btn(false), color: C.danger, opacity: rows.length ? 1 : 0.5 }}>
+          <Trash2 size={13} /> Delete all
         </button>
         <button onClick={reload} disabled={loading} style={{ ...btn(false), opacity: loading ? 0.5 : 1 }}>
           <RefreshCcw size={13} /> Refresh
@@ -888,11 +1011,38 @@ export default function ResponsesTab({ rows, tableRows = [], loading, error, rel
         </div>
       )}
 
+      {delResult && (
+        <div role="status" style={{ fontSize: 12, lineHeight: 1.5, borderRadius: 10, padding: "10px 12px", marginBottom: 10, display: "flex", gap: 10, alignItems: "flex-start",
+          background: delResult.blocked || delResult.failed ? C.dangerDim : C.primaryDim, color: C.text }}>
+          <div style={{ flex: 1 }}>
+            {delResult.blocked
+              ? <><strong>Nothing was deleted.</strong> The database isn't allowing deletes from the app for this table. Run the delete-permission SQL in Supabase, then try again.</>
+              : <><strong>{delResult.deleted} deleted{delResult.failed ? `, ${delResult.failed} failed` : ""}.</strong>{delResult.failed ? " Refresh and try the remaining rows again." : ""}</>}
+          </div>
+          <button onClick={() => setDelResult(null)} aria-label="Dismiss" style={{ background: "none", border: "none", cursor: "pointer", color: C.dim, padding: 0 }}><X size={14} /></button>
+        </div>
+      )}
+
+      {picked.size > 0 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", background: C.surface2, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 10px", marginBottom: 10 }}>
+          <span style={{ fontSize: 13, fontWeight: 600, color: C.text, flex: 1 }}>{picked.size} selected</span>
+          <button onClick={() => setPicked(new Set())} style={btn(false)}>Clear</button>
+          <button onClick={() => setConfirmDel({ all: false })} style={{ ...btn(true), background: C.danger, color: "#fff" }}>
+            <Trash2 size={13} /> Delete selected
+          </button>
+        </div>
+      )}
+
       {visible.length > 0 && (
         <div style={{ overflowX: "auto", borderRadius: 10, border: `1px solid ${C.border}` }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, color: C.text }}>
             <thead>
               <tr style={{ background: C.surface2 }}>
+                <th style={{ padding: "8px 6px 8px 10px", width: 28, borderBottom: `1px solid ${C.border}` }}>
+                  <input type="checkbox" aria-label="Select all shown rows" checked={allVisiblePicked}
+                    ref={(el) => { if (el) el.indeterminate = !allVisiblePicked && someVisiblePicked; }}
+                    onChange={toggleAllVisible} style={{ accentColor: "var(--danger)", width: 16, height: 16, cursor: "pointer" }} />
+                </th>
                 {["Submitted", "Country", "Level", "Time in US", "PHQ-2", "GAD-2", "Flags"].map((h) => (
                   <th key={h} style={{ padding: "8px 10px", textAlign: h.startsWith("PHQ") || h.startsWith("GAD") ? "center" : "left",
                     fontWeight: 600, whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{h}</th>
@@ -903,7 +1053,12 @@ export default function ResponsesTab({ rows, tableRows = [], loading, error, rel
               {visible.map((r, i) => (
                 <tr key={r.id} tabIndex={0} onClick={() => setSelected(r)}
                   onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && setSelected(r)}
-                  style={{ cursor: "pointer", background: i % 2 ? C.deep : C.surface }}>
+                  style={{ cursor: "pointer", background: picked.has(r.id) ? C.dangerDim : i % 2 ? C.deep : C.surface }}>
+                  <td onClick={(e) => e.stopPropagation()} onKeyDown={(e) => e.stopPropagation()}
+                    style={{ padding: "8px 6px 8px 10px", borderBottom: `1px solid ${C.border}` }}>
+                    <input type="checkbox" aria-label="Select this row" checked={picked.has(r.id)} onChange={() => togglePick(r.id)}
+                      style={{ accentColor: "var(--danger)", width: 16, height: 16, cursor: "pointer" }} />
+                  </td>
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{fmtDate(r.timestamp)}</td>
                   <td style={{ padding: "8px 10px", borderBottom: `1px solid ${C.border}` }}>{text(r.q1) || "—"}</td>
                   <td style={{ padding: "8px 10px", whiteSpace: "nowrap", borderBottom: `1px solid ${C.border}` }}>{text(r.q2).split(" (")[0] || "—"}</td>
@@ -923,11 +1078,22 @@ export default function ResponsesTab({ rows, tableRows = [], loading, error, rel
 
       {visible.length > 0 && (
         <div style={{ fontSize: 11, color: C.dim, marginTop: 6 }}>
-          Showing {visible.length} of {rows.length}. Tap a row to see the full response.
+          Showing {visible.length} of {rows.length}. Tap a row to see the full response, or tick boxes to delete several at once.
         </div>
       )}
 
       {selected && <DetailPanel row={selected} onClose={() => setSelected(null)} onDelete={removeRow} ds={ds} />}
+      {confirmDel && (
+        <DeleteConfirmModal
+          all={confirmDel.all}
+          count={confirmDel.all ? rows.length : pickedRows.length}
+          total={rows.length}
+          dataset={ds}
+          rowsToBackup={confirmDel.all ? rows : pickedRows}
+          onCancel={() => setConfirmDel(null)}
+          onConfirm={runDelete}
+        />
+      )}
       {importOpen && (
         <BulkImportModal
           dataset={ds}
