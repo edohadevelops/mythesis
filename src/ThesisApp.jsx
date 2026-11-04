@@ -2303,7 +2303,7 @@ function FundingView({ fundingStatus, onToggle }) {
      - thesis_responses table (public survey.html / QR code)
      - thesis_state "responses" (in-app form + manual entries)
 ──────────────────────────────────────────────────────────────────────── */
-function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetAppUrl, dataSource = "real", onSetDataSource }) {
+function SurveyView({ responses, onAddResponse, onDeleteResponse, onDeleteResponses, appUrl, onSetAppUrl, dataSource = "real", onSetDataSource }) {
   const [tab, setTab]             = useState("qr");
   const [form, setForm]           = useState({});
   const [submitting, setSubmitting] = useState(false);
@@ -2333,7 +2333,7 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, appUrl, onSetA
   }, [qrFull]);
 
   const isPseudo = dataSource === "pseudo";
-  const all = useAllResponses({ sbUrl: SB_URL, sbKey: SB_KEY, localResponses: responses, onDeleteLocal: onDeleteResponse, dataset: dataSource });
+  const all = useAllResponses({ sbUrl: SB_URL, sbKey: SB_KEY, localResponses: responses, onDeleteLocal: onDeleteResponse, onDeleteLocalMany: onDeleteResponses, dataset: dataSource });
 
   const sections    = [...new Set(SURVEY_FIELDS.map((f) => f.section))];
   const totalCount  = all.rows.length;
@@ -3031,6 +3031,7 @@ function ThesisAppInner() {
   const toggleFunding  = (id, v)      => { const n = { ...fundingStatus, [id]: v }; setFundingStatus(n); sbSave("funding", n); };
   const addResponse    = async (r)    => { const n = [...responses, r]; setResponses(n); sbSave("responses", n); };
   const deleteResponse = (id)         => { const n = responses.filter((r) => r.id !== id); setResponses(n); sbSave("responses", n); };
+  const deleteResponses = (ids)       => { const drop = new Set(ids); setResponses((cur) => { const n = cur.filter((r) => !drop.has(r.id)); sbSave("responses", n); return n; }); };
   const setGFormLink   = (l)          => { setGoogleFormLink(l); sbSave("google-form-link", l); };
   const setDataSourceS = (v)          => { setDataSource(v); sbSave("data-source", v); };
   const setThemeS      = (t)          => { setTheme(t);    sbSave("theme", t); };
@@ -3193,7 +3194,7 @@ function ThesisAppInner() {
         {view === "analysis"   && <AnalysisView rStatus={rStatus} onToggleStep={toggleRStep} rNotes={rNotes} onUpdateNote={updateRNote} aucValue={aucValue} onSetAuc={saveAuc} />}
         {view === "sessions"   && <SessionsView sessions={sessions} onAdd={addSession} onDelete={deleteSession} />}
         {view === "defense"    && <DefenseView defenseAnswers={defAnswers} onUpdateAnswer={updateDefAns} defenseDone={defDone} onToggleDefense={toggleDefDone} practiceLog={practiceLog} onAddPractice={addPractice} />}
-        {view === "survey"     && <SurveyView responses={responses} onAddResponse={addResponse} onDeleteResponse={deleteResponse} appUrl={googleFormLink} onSetAppUrl={setGFormLink} dataSource={dataSource} onSetDataSource={setDataSourceS} />}
+        {view === "survey"     && <SurveyView responses={responses} onAddResponse={addResponse} onDeleteResponse={deleteResponse} onDeleteResponses={deleteResponses} appUrl={googleFormLink} onSetAppUrl={setGFormLink} dataSource={dataSource} onSetDataSource={setDataSourceS} />}
         {view === "motivation" && <MotivationView gloriaNote={gloriaNote} onSetGloriaNote={saveGloria} />}
         {view === "settings"   && <SettingsView theme={theme} onSetTheme={setThemeS} fontSize={fontSize} onSetFontSize={setFontSizeS} onReset={resetAll} onExport={exportBackup} onImport={importBackup} notifEnabled={notifEnabled} onEnableNotif={enableNotif} onDisableNotif={disableNotif} />}
 
