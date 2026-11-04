@@ -544,7 +544,7 @@ const TASK_GUIDES = {
     why:"Surveys lose momentum quickly after launch. A second push 1 week in typically produces a second wave of responses.",
     timeEstimate:"4 hours (Thursday block)",
     steps:[
-      {step:"Check response count. Calculate EPV: (responses × 0.75 × 0.30) ÷ 13. Log in Data Hub tab."},
+      {step:"Check response count. Calculate EPV: (responses × 0.75 × 0.30) ÷ 10. Log in Data Hub tab."},
       {step:"Send second-round reminders in all channels with a different message angle."},
       {step:"Practice LASSO in R: library(glmnet); x <- model.matrix(vs ~ ., data=mtcars)[,-1]; y <- mtcars$vs; cv_lasso <- cv.glmnet(x, y, family='binomial', nfolds=10); plot(cv_lasso); coef(cv_lasso, s='lambda.min')"},
       {step:"Practice ROC: library(pROC); preds <- predict(cv_lasso, newx=x, s='lambda.min', type='response'); roc_obj <- roc(y, as.vector(preds)); auc(roc_obj); plot(roc_obj)"},
@@ -2338,7 +2338,8 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, onDeleteRespon
   const sections    = [...new Set(SURVEY_FIELDS.map((f) => f.section))];
   const totalCount  = all.rows.length;
   const atRiskCount = all.rows.filter((r) => r._atRisk).length;
-  const epvNum      = totalCount > 0 ? (totalCount * 0.75 * 0.30) / 13 : 0;
+  const EPV_PREDICTORS = 10;
+  const epvNum      = totalCount > 0 ? (totalCount * 0.75 * 0.30) / EPV_PREDICTORS : 0;
   const epv         = epvNum.toFixed(1);
   const epvColor    = epvNum >= 10 ? T.blue : epvNum >= 5 ? T.amber : T.coral;
 
@@ -2495,7 +2496,7 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, onDeleteRespon
           <div style={{ display:"flex", gap:8, flexWrap:"wrap", justifyContent:"center" }}>
             <StatCard label="Responses" value={totalCount} color={T.amber} sub="total collected" />
             <StatCard label="At risk" value={atRiskCount} color={T.coral} sub="PHQ-2 ≥ 3" />
-            <StatCard label="EPV" value={epv} color={epvColor} sub="÷ 13 predictors" />
+            <StatCard label="EPV" value={epv} color={epvColor} sub={`÷ ${EPV_PREDICTORS} predictors`} />
           </div>
         </div>
       )}
@@ -2604,7 +2605,7 @@ function SurveyView({ responses, onAddResponse, onDeleteResponse, onDeleteRespon
           <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
             <StatCard label="Total responses" value={totalCount} color={T.amber} />
             <StatCard label="At risk (PHQ-2≥3)" value={atRiskCount} color={T.coral} sub={`${totalCount>0?Math.round(atRiskCount/totalCount*100):0}%`} />
-            <StatCard label="EPV" value={epv} color={epvColor} sub="÷ 13 predictors" />
+            <StatCard label="EPV" value={epv} color={epvColor} sub={`÷ ${EPV_PREDICTORS} predictors`} />
             <StatCard label="Need" value={Math.max(0,450-totalCount)} color={T.chalkDim} sub="to reach 450 target" />
           </div>
 
