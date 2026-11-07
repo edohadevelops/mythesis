@@ -14,7 +14,7 @@
  *           Spark evening — NO thesis (rest day)
  *
  *   Weekly thesis hours: ~11 guaranteed
- *   Weeks to defense (Nov 15): 13
+ *   Weeks to defense (Nov 10): 13
  *   Total thesis hours available: ~143
  *
  * DEPLOY:
@@ -86,7 +86,7 @@ async function sbSave(key, value) {
 }
 
 /* ─── CONSTANTS ─────────────────────────────────────────────────────── */
-const DEFENSE_DATE = "2026-11-15";
+const DEFENSE_DATE = "2026-11-10";
 const TODAY = () => new Date().toISOString().slice(0, 10);
 const DAYS_UNTIL = (d) => Math.max(0, Math.ceil((new Date(d) - new Date()) / 86400000));
 const WEEKS_LEFT = () => Math.ceil(DAYS_UNTIL(DEFENSE_DATE) / 7);
@@ -284,7 +284,7 @@ function buildTaskPlan() {
     { date:"2026-11-10", dow:2, task:"Build defense presentation: all 15 slides. Title, intro, methods, results (tables + ROC curve), discussion (H1–H4), First 90 app applied output, conclusion, references. Tuesday 9am–1pm.", phase:"Defense" },
     { date:"2026-11-12", dow:4, task:"Full defense run-through — time yourself, target 20–25 min. Draft answers to all 10 committee questions. Send slides to Dr. Zheng for a final look. Thursday 10am–2pm.", phase:"Defense" },
     { date:"2026-11-14", dow:6, task:"Rest. Pray. Review your notes gently. You have done the work. Trust what God has built in you.", phase:"Defense" },
-    { date:"2026-11-15", dow:0, task:"🎓 DEFENSE DAY — You are ready. God has brought you this far.", phase:"Defense", milestone:true },
+    { date:"2026-11-10", dow:0, task:"🎓 DEFENSE DAY — You are ready. God has brought you this far.", phase:"Defense", milestone:true },
   ];
 
   return plan.map((t, i) => ({ ...t, id: `task-${i}`, done: false }));
@@ -361,7 +361,7 @@ const TASK_GUIDES = {
       {step:"Fill in the funding application: full name (Amen Engworo Edoha), student ID (M03617692), department (Mathematics), advisor (Dr. Songfeng Zheng), thesis title."},
       {step:"Write the Research Goals section (1 paragraph): cross-sectional survey, PHQ-2 outcome, logistic regression + LASSO, composite risk index, First 90 app."},
       {step:"Write the Budget section: survey platform, printing for flyers and consent forms, any participant incentives. Total requested: up to $500."},
-      {step:"Write the Timeline: IRB Sep, survey Sep, data collection Sep–Oct, analysis Oct, writing Oct–Nov, defense Nov 15."},
+      {step:"Write the Timeline: IRB Sep, survey Sep, data collection Sep–Oct, analysis Oct, writing Oct–Nov, defense Nov 10."},
       {step:"Merge into ONE PDF: application + Dr. Zheng letter (if received) + all 3 CITI certificates. Use ilovepdf.com if needed."},
       {step:"Email the single PDF to the Graduate College before September 1. Subject: Thesis Research Funding Application — Amen Engworo Edoha — Fall 2026. CC yourself."},
       {step:"Start the IRB informed consent draft — 150–200 words covering: study purpose, voluntary participation, anonymity, no academic or immigration consequences, researcher contact info."},
@@ -388,9 +388,9 @@ const TASK_GUIDES = {
     why:"Your first formal meeting since the thesis plan was finalized. Align on Chapter 2 progress, IRB status, defense date, and funding.",
     timeEstimate:"1 hour meeting",
     steps:[
-      {step:"PREP (Tuesday before): Print Chapter 1 and whatever Chapter 2 sections you have. Write a one-page agenda: current status, IRB status, funding submitted, survey plan, defense November 15, questions for him."},
+      {step:"PREP (Tuesday before): Print Chapter 1 and whatever Chapter 2 sections you have. Write a one-page agenda: current status, IRB status, funding submitted, survey plan, defense November 10, questions for him."},
       {step:"Arrive on time Thursday 10am. Bring printed materials and your agenda."},
-      {step:"Walk Dr. Zheng through: what is done, what is in progress, what is coming. Confirm November 15 defense date."},
+      {step:"Walk Dr. Zheng through: what is done, what is in progress, what is coming. Confirm November 10 defense date."},
       {step:"Ask: Does he approve the defense date? Does he need to review chapters before IRB submission? Has he received the funding letter request?"},
       {step:"Email Dr. Zheng a brief meeting summary within 24 hours."},
     ],
@@ -588,7 +588,7 @@ const TASK_GUIDES = {
     steps:[
       {step:"Export current data. Count complete responses. Calculate EPV. EPV ≥ 10: close Oct 3 as planned. EPV 5–10: acceptable for LASSO, proceed. EPV < 5: extend and intensify outreach for 2 more weeks."},
       {step:"If closing Oct 3: compose a last-call message for all channels: Last call — survey closing October 3. If you have 6 minutes, please fill it out now."},
-      {step:"If extending: email Dr. Zheng to inform him and update your timeline. Analysis dates shift 1–2 weeks but defense Nov 15 should hold if extension is short."},
+      {step:"If extending: email Dr. Zheng to inform him and update your timeline. Analysis dates shift 1–2 weeks but defense Nov 10 should hold if extension is short."},
       {step:"Use remaining time for Chapter 3 final read-through — read it aloud, rewrite anything unclear. Chapter 3 should be fully polished before data analysis begins."},
     ],
     tips:["A sample of 350–400 gives EPV ~6.7 — workable. A sample of 200–250 gives EPV ~3.8 — too low for stable logistic regression but acceptable if you use LASSO primarily and report it carefully in limitations."],
@@ -773,7 +773,7 @@ const TASK_GUIDES = {
       {step:"Fix important issues: unclear sentences, missing transitions, awkward phrasing."},
       {step:"Final proofread: grammar, spelling, APA citation format, page numbers, consistent headings."},
       {step:"Export as PDF: File → Save As → PDF. Check every page renders correctly."},
-      {step:"Email to Dr. Zheng: complete PDF, note the defense date November 15, request feedback by November 12."},
+      {step:"Email to Dr. Zheng: complete PDF, note the defense date November 10, request feedback by November 12."},
       {step:"CC your own email as a timestamped backup record."},
     ],
     tips:["A good complete draft is better than a perfect partial one.","CC your MSU email and personal email on the send."],
@@ -1440,7 +1440,7 @@ function DashboardView({ tasks, chapterStatus, sessions, irbStatus, fundingStatu
       {/* Stats */}
       <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
         <StatCard label="To defense" value={daysLeft} color={daysLeft < 21 ? T.coral : T.amber} sub={DEFENSE_DATE} />
-        <StatCard label="Weeks left" value={weeksLeft} color={T.amber} sub="Nov 15 target" />
+        <StatCard label="Weeks left" value={weeksLeft} color={T.amber} sub="Nov 10 target" />
         <StatCard label="Hrs logged" value={totalHrs.toFixed(1)} color={T.blue} sub="thesis sessions" />
         <StatCard label="IRB done" value={`${doneIrb}/${allIrb.length}`} color="#7f56d9" sub="tasks complete" />
       </div>
@@ -1590,7 +1590,7 @@ const FUNDING = [
     { id:"fund-5",  label:"Fill in project title, your name, student ID (M03617692), department, advisor name", note:"Department: Mathematics. Advisor: Dr. Songfeng Zheng" },
     { id:"fund-6",  label:"Write the research goals section — what you are studying and why", note:"Cross-sectional survey of international students. 30 questions. PHQ-2 ≥ 3 as outcome. LASSO + logistic regression. Composite risk index. First 90 app." },
     { id:"fund-7",  label:"Write the budget section — what the $500 will cover", note:"Survey hosting fees (Qualtrics license if needed), printing for IRB consent forms and recruitment flyers, any participant incentives, statistical software if required" },
-    { id:"fund-8",  label:"Write the timeline — show the project will be completed this semester", note:"IRB approval Sep, survey collection Sep–Oct, data analysis Oct, writing Oct–Nov, defense Nov 15" },
+    { id:"fund-8",  label:"Write the timeline — show the project will be completed this semester", note:"IRB approval Sep, survey collection Sep–Oct, data analysis Oct, writing Oct–Nov, defense Nov 10" },
     { id:"fund-9",  label:"Attach Dr. Zheng's letter of support once received" },
     { id:"fund-10", label:"Attach all CITI training completion certificates (3 certificates)", note:"Social-Behavioral-Educational, FERPA for Researchers, Research Security Basic Training" },
     { id:"fund-11", label:"Attach any other IRB or compliance documentation you have", note:"Cayuse submission confirmation, IRB approval letter if received" },
@@ -1628,7 +1628,7 @@ function PlanView({ tasks, onToggle, onOverride }) {
     <div style={{ animation: "fadeIn .3s ease" }}>
       <div style={{ fontSize: 18, fontWeight: 600, color: T.chalk, marginBottom: 4 }}>Thesis task plan</div>
       <div style={{ fontSize: 13, color: T.chalkDim, marginBottom: 14 }}>
-        Aug 20 → Nov 15 · Tue 9am–1pm · Thu 10am–2pm · Sat 1pm–4pm
+        Aug 20 → Nov 10 · Tue 9am–1pm · Thu 10am–2pm · Sat 1pm–4pm
       </div>
 
       {Object.entries(grouped).map(([wk, wkTasks]) => {
@@ -2794,7 +2794,7 @@ function SettingsView({ theme, onSetTheme, fontSize, onSetFontSize, onReset, onE
         {[
           ["Student","Amen Engworo Edoha (M03617692)"],
           ["Advisor","Dr. Songfeng Zheng · SongfengZheng@missouristate.edu"],
-          ["Defense","November 15 2026"],
+          ["Defense","November 10 2026"],
           ["IRB phone","417-836-3737"],
           ["IRB email","irb@missouristate.edu"],
           ["Cayuse","msu.app.cayuse.com · FWA 00004733"],

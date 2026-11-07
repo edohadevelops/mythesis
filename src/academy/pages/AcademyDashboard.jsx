@@ -4,7 +4,7 @@ import { getAllProgress } from "../db.js";
 import { MATH_LESSONS } from "../data/mathLessons.js";
 import { BookOpen, Microscope, Shield, Hash, ExternalLink, Calendar } from "lucide-react";
 
-const DEFENSE_DATE = new Date("2026-11-15T00:00:00");
+const DEFENSE_DATE = new Date("2026-11-10T00:00:00");
 
 function daysUntil(date) {
   const now = new Date();
@@ -52,7 +52,7 @@ export default function AcademyDashboard() {
             <div className="text-3xl font-bold text-ivory">
               {days} <span className="text-xl font-normal text-ivory/60">days</span>
             </div>
-            <div className="text-sm text-ivory/50 mt-1">Nov 15, 2026</div>
+            <div className="text-sm text-ivory/50 mt-1">Nov 10, 2026</div>
           </div>
           <Calendar size={40} className="text-gold/30" />
         </div>
