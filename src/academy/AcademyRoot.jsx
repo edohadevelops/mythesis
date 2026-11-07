@@ -3,7 +3,7 @@
  * Lives at /academy/*
  * Never modifies ThesisApp.jsx or its routes.
  */
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Routes, Route, useNavigate, useLocation } from "react-router-dom";
 import AcademyDashboard from "./pages/AcademyDashboard.jsx";
 import MathLab from "./pages/MathLab.jsx";
@@ -12,11 +12,23 @@ import MockDefense from "./pages/MockDefense.jsx";
 import GlossaryPage from "./pages/GlossaryPage.jsx";
 import CRICalculator from "./pages/CRICalculator.jsx";
 import VisualizationsPage from "./pages/VisualizationsPage.jsx";
-import { GraduationCap, Home } from "lucide-react";
+import AuthPage from "./pages/AuthPage.jsx";
+import AITutor from "./pages/AITutor.jsx";
+import ThesisFullExplorer from "./pages/ThesisFullExplorer.jsx";
+import { GraduationCap, Home, User, Bot } from "lucide-react";
 
 function AcademyLayout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
+  const [userEmail, setUserEmail] = useState(null);
+
+  useEffect(() => {
+    // Lazy import to avoid bundling auth everywhere
+    import("./auth.js").then(({ getUser }) => {
+      const u = getUser();
+      setUserEmail(u?.email || null);
+    });
+  }, [location.pathname]);
 
   return (
     <div
@@ -46,6 +58,20 @@ function AcademyLayout({ children }) {
             F90 Defense Academy
           </button>
           <div className="flex-1" />
+          <button
+            onClick={() => navigate("/academy/tutor")}
+            className="text-xs opacity-40 hover:opacity-80 transition-opacity flex items-center gap-1 mr-2"
+          >
+            <Bot size={12} />
+            Tutor
+          </button>
+          <button
+            onClick={() => navigate("/academy/auth")}
+            className="text-xs opacity-40 hover:opacity-80 transition-opacity flex items-center gap-1 mr-3"
+          >
+            <User size={12} />
+            {userEmail ? userEmail.split("@")[0] : "Sign in"}
+          </button>
           <a
             href="/"
             className="text-xs opacity-40 hover:opacity-80 transition-opacity flex items-center gap-1"
@@ -74,6 +100,9 @@ export default function AcademyRoot() {
         <Route path="glossary" element={<GlossaryPage />} />
         <Route path="cri" element={<CRICalculator />} />
         <Route path="visualize" element={<VisualizationsPage />} />
+        <Route path="auth" element={<AuthPage />} />
+        <Route path="tutor" element={<AITutor />} />
+        <Route path="explore" element={<ThesisFullExplorer />} />
       </Routes>
     </AcademyLayout>
   );

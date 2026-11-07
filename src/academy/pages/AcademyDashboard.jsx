@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getAllProgress } from "../db.js";
 import { MATH_LESSONS } from "../data/mathLessons.js";
 import { MATH_LESSONS_2 } from "../data/mathLessons2.js";
-import { BookOpen, Microscope, Shield, Hash, ExternalLink, Calendar, Calculator, BarChart2 } from "lucide-react";
+import { BookOpen, Microscope, Shield, Hash, ExternalLink, Calendar, Calculator, BarChart2, Bot, Layers } from "lucide-react";
 
 const DEFENSE_DATE = new Date("2026-11-10T00:00:00");
 const ALL_LESSONS = [...MATH_LESSONS, ...MATH_LESSONS_2];
@@ -101,8 +101,14 @@ export default function AcademyDashboard() {
       {/* Nav cards */}
       <div className="grid grid-cols-1 gap-4 mb-8">
         <NavCard
+          icon={Layers} iconColor="text-gold" bgColor="bg-gold/15"
+          title="Full Thesis Explorer" subtitle="All 5 chapters — annotated sections with defense coach notes"
+          onClick={() => navigate("/academy/explore")}
+        />
+
+        <NavCard
           icon={Microscope} iconColor="text-sage" bgColor="bg-sage/20"
-          title="Results Explorer" subtitle="Chapter 4 — Every result with what/why/how-to-defend"
+          title="Results Deep Dive" subtitle="Chapter 4 — Every result with what/why/how-to-defend"
           onClick={() => navigate("/academy/thesis")}
         />
 
@@ -129,6 +135,13 @@ export default function AcademyDashboard() {
             onClick={() => navigate("/academy/visualize")}
           />
         </div>
+
+        <NavCard
+          icon={Bot} iconColor="text-sage" bgColor="bg-sage/15"
+          title="AI Socratic Tutor"
+          subtitle="Explain · Derive · Challenge · Test — guided by your thesis data"
+          onClick={() => navigate("/academy/tutor")}
+        />
 
         <NavCard
           icon={Shield} iconColor="text-terracotta" bgColor="bg-terracotta/20"
