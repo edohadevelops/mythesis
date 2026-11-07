@@ -10,6 +10,8 @@ import MathLab from "./pages/MathLab.jsx";
 import ThesisExplorer from "./pages/ThesisExplorer.jsx";
 import MockDefense from "./pages/MockDefense.jsx";
 import GlossaryPage from "./pages/GlossaryPage.jsx";
+import CRICalculator from "./pages/CRICalculator.jsx";
+import VisualizationsPage from "./pages/VisualizationsPage.jsx";
 import { GraduationCap, Home } from "lucide-react";
 
 function AcademyLayout({ children }) {
@@ -70,6 +72,8 @@ export default function AcademyRoot() {
         <Route path="math/:lessonId" element={<MathLab />} />
         <Route path="defense" element={<MockDefense />} />
         <Route path="glossary" element={<GlossaryPage />} />
+        <Route path="cri" element={<CRICalculator />} />
+        <Route path="visualize" element={<VisualizationsPage />} />
       </Routes>
     </AcademyLayout>
   );

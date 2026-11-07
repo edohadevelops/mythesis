@@ -1,9 +1,12 @@
 import React from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { MATH_LESSONS } from "../data/mathLessons.js";
+import { MATH_LESSONS_2 } from "../data/mathLessons2.js";
 import { getAllProgress } from "../db.js";
 import LessonView from "../components/LessonView.jsx";
 import { ChevronLeft, CheckCircle } from "lucide-react";
+
+const ALL_LESSONS = [...MATH_LESSONS, ...MATH_LESSONS_2];
 
 function LessonCard({ lesson, progress, onClick }) {
   const mastery = progress?.mastery || 0;
@@ -58,7 +61,7 @@ export default function MathLab() {
   const allProgress = getAllProgress();
 
   const activeLesson = lessonId
-    ? MATH_LESSONS.find((l) => l.id === lessonId)
+    ? ALL_LESSONS.find((l) => l.id === lessonId)
     : null;
 
   if (activeLesson) {
@@ -72,6 +75,9 @@ export default function MathLab() {
     );
   }
 
+  const phase1 = MATH_LESSONS;
+  const phase2 = MATH_LESSONS_2;
+
   return (
     <div className="max-w-2xl mx-auto pb-16">
       <button
@@ -83,19 +89,40 @@ export default function MathLab() {
 
       <h1 className="text-2xl font-bold text-ivory mb-1">Mathematics Lab</h1>
       <p className="text-ivory/50 text-sm mb-8">
-        Six foundational topics for your defense. Each has intuition, formal math,
-        notation, derivation, thesis application, and active-recall exercises.
+        {ALL_LESSONS.length} topics covering everything your committee might ask.
+        Each lesson has intuition, formal math, notation, derivation, thesis application, and active-recall exercises.
       </p>
 
-      <div className="space-y-3">
-        {MATH_LESSONS.map((lesson) => (
-          <LessonCard
-            key={lesson.id}
-            lesson={lesson}
-            progress={allProgress[lesson.id]}
-            onClick={() => navigate(`/academy/math/${lesson.id}`)}
-          />
-        ))}
+      <div className="mb-8">
+        <h2 className="text-xs uppercase tracking-widest text-ivory/40 mb-3">
+          Phase 1 — Core Methods
+        </h2>
+        <div className="space-y-3">
+          {phase1.map((lesson) => (
+            <LessonCard
+              key={lesson.id}
+              lesson={lesson}
+              progress={allProgress[lesson.id]}
+              onClick={() => navigate(`/academy/math/${lesson.id}`)}
+            />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <h2 className="text-xs uppercase tracking-widest text-ivory/40 mb-3">
+          Phase 2 — Advanced Mathematics
+        </h2>
+        <div className="space-y-3">
+          {phase2.map((lesson) => (
+            <LessonCard
+              key={lesson.id}
+              lesson={lesson}
+              progress={allProgress[lesson.id]}
+              onClick={() => navigate(`/academy/math/${lesson.id}`)}
+            />
+          ))}
+        </div>
       </div>
     </div>
   );
