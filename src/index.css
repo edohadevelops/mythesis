@@ -3,3 +3,8 @@
 @tailwind utilities;
 html, body, #root { height: 100%; }
 body { margin: 0; }
+
+/* KaTeX display block centering */
+.katex-display-wrap .katex-display { margin: 0; }
+.katex-inline { display: inline; }
+
