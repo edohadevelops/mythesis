@@ -57,6 +57,18 @@ const CAT_COLORS = {
 
 // ── PowerPoint Card ───────────────────────────────────────────────────────
 function PowerPointCard() {
+  const btnStyle = {
+    color: "#fff",
+    padding: "8px 18px",
+    borderRadius: 8,
+    fontSize: "0.82rem",
+    fontWeight: 600,
+    textDecoration: "none",
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    whiteSpace: "nowrap",
+  };
   return (
     <div
       style={{
@@ -65,47 +77,40 @@ function PowerPointCard() {
         borderRadius: 12,
         padding: "20px 24px",
         marginBottom: 24,
-        display: "flex",
-        alignItems: "center",
-        gap: 16,
-        flexWrap: "wrap",
       }}
     >
-      <div style={{ flex: 1, minWidth: 200 }}>
-        <div
-          style={{
-            color: "#D4A456",
-            fontWeight: 700,
-            fontSize: "0.9rem",
-            marginBottom: 4,
-          }}
-        >
-          📊 Defense Presentation
+      {/* Slides row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ color: "#D4A456", fontWeight: 700, fontSize: "0.9rem", marginBottom: 4 }}>
+            📊 Defense Presentation
+          </div>
+          <div style={{ color: "#a0aec0", fontSize: "0.82rem" }}>
+            F90_Defense_v4.pptx — full presenter notes, equation numbers &amp; committee Q&amp;A on every slide
+          </div>
         </div>
-        <div style={{ color: "#a0aec0", fontSize: "0.82rem" }}>
-          F90_Defense_v3.pptx — 90-slide deck for your November 10 committee
-        </div>
+        <a href="/F90_Defense_v4.pptx" download style={{ ...btnStyle, background: "#B07A30" }}>
+          <Download size={14} />
+          Download Slides
+        </a>
       </div>
-      <a
-        href="/F90_Defense_v3.pptx"
-        download
-        style={{
-          background: "#B07A30",
-          color: "#fff",
-          padding: "8px 18px",
-          borderRadius: 8,
-          fontSize: "0.82rem",
-          fontWeight: 600,
-          textDecoration: "none",
-          display: "flex",
-          alignItems: "center",
-          gap: 6,
-          whiteSpace: "nowrap",
-        }}
-      >
-        <Download size={14} />
-        Download Slides
-      </a>
+      {/* Divider */}
+      <div style={{ borderTop: "1px solid rgba(255,255,255,0.08)", marginBottom: 14 }} />
+      {/* Film row */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ color: "#D4A456", fontWeight: 700, fontSize: "0.9rem", marginBottom: 4 }}>
+            🎬 FIRST 90 Concept Film
+          </div>
+          <div style={{ color: "#a0aec0", fontSize: "0.82rem" }}>
+            FIRST90_Defense_Burgundy_Edit_2.mp4 — insert into Slide 22 before your defense
+          </div>
+        </div>
+        <a href="/FIRST90_Defense_Film.mp4" download style={{ ...btnStyle, background: "#5A1E30" }}>
+          <Download size={14} />
+          Download Film
+        </a>
+      </div>
     </div>
   );
 }
