@@ -86,10 +86,10 @@ function PowerPointCard() {
             📊 Defense Presentation
           </div>
           <div style={{ color: "#a0aec0", fontSize: "0.82rem" }}>
-            F90_Defense_v4.pptx — full presenter notes, equation numbers &amp; committee Q&amp;A on every slide
+            F90_Defense_Final_Revised.pptx — final revised deck with presenter notes &amp; committee Q&amp;A
           </div>
         </div>
-        <a href="/F90_Defense_v4.pptx" download style={{ ...btnStyle, background: "#B07A30" }}>
+        <a href="/F90_Defense_Final_Revised.pptx" download style={{ ...btnStyle, background: "#B07A30" }}>
           <Download size={14} />
           Download Slides
         </a>
