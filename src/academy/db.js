@@ -111,3 +111,37 @@ export function saveDefenseSession(session) {
     localStorage.setItem("academy_defense_sessions", JSON.stringify(sessions.slice(-20)));
   } catch {}
 }
+
+// ── Per-question mastery (defense flashcard / browse mode) ────────────────
+// Stored as: { [questionId]: "known" | "partial" | null }
+export function getQuestionMastery(qId) {
+  try {
+    const raw = localStorage.getItem("academy_q_mastery");
+    const all = raw ? JSON.parse(raw) : {};
+    return all[qId] || null;
+  } catch {
+    return null;
+  }
+}
+
+export function setQuestionMastery(qId, level) {
+  try {
+    const raw = localStorage.getItem("academy_q_mastery");
+    const all = raw ? JSON.parse(raw) : {};
+    if (level === null) {
+      delete all[qId];
+    } else {
+      all[qId] = level;
+    }
+    localStorage.setItem("academy_q_mastery", JSON.stringify(all));
+  } catch {}
+}
+
+export function getAllMastery() {
+  try {
+    const raw = localStorage.getItem("academy_q_mastery");
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
